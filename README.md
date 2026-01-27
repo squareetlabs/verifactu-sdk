@@ -522,7 +522,7 @@ Este paquete es open-source bajo la [Licencia MIT](LICENSE).
 ## Soporte
 
 - **Documentación técnica AEAT**: [https://sede.agenciatributaria.gob.es/Sede/iva/sistemas-informaticos-facturacion-verifactu/informacion-tecnica.html](https://sede.agenciatributaria.gob.es/Sede/iva/sistemas-informaticos-facturacion-verifactu/informacion-tecnica.html)
-- **Issues**: [https://github.com/squareetlabs/verifactu/issues](https://github.com/squareetlabs/verifactu/issues)
+- **Issues**: [https://github.com/squareetlabs/verifactu-sdk/issues](https://github.com/squareetlabs/verifactu-sdk/issues)
 
 ## Autores
 
