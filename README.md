@@ -30,9 +30,23 @@ cd verifactu
 mvn clean install
 ```
 
-### Opción 2: Añadir como dependencia Maven
+### Opción 2: Desde GitHub Packages (Recomendado)
 
-Añade la dependencia a tu `pom.xml`:
+Añade el repositorio a tu `pom.xml` o `settings.xml`:
+
+```xml
+<repositories>
+    <repository>
+        <id>github</id>
+        <url>https://maven.pkg.github.com/squareetlabs/verifactu-sdk</url>
+        <snapshots>
+            <enabled>true</enabled>
+        </snapshots>
+    </repository>
+</repositories>
+```
+
+Y la dependencia:
 
 ```xml
 <dependency>
@@ -41,6 +55,8 @@ Añade la dependencia a tu `pom.xml`:
     <version>1.0.0</version>
 </dependency>
 ```
+
+**Nota**: Necesitarás configurar tus credenciales de GitHub (token) en tu `settings.xml` para acceder al paquete.
 
 ## Configuración
 
