@@ -25,8 +25,8 @@ Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu 
 Clona el repositorio y construye el paquete:
 
 ```bash
-git clone https://github.com/squareetlabs/verifactu.git
-cd verifactu
+git clone https://github.com/squareetlabs/verifactu-sdk.git
+cd verifactu-sdk
 mvn clean install
 ```
 
@@ -37,7 +37,7 @@ Añade la dependencia a tu `pom.xml`:
 ```xml
 <dependency>
     <groupId>com.squareetlabs</groupId>
-    <artifactId>verifactu</artifactId>
+    <artifactId>verifactu-sdk</artifactId>
     <version>1.0.0</version>
 </dependency>
 ```
