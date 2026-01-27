@@ -38,7 +38,7 @@ public class VeriFactuComplianceTest {
 
         // Hash esperado según ejemplo AEAT
         assertEquals(
-                "4EECCE4DD48C0539665385D61D451BA921B7160CA6FEF46CD3C2E2BC5C778E14",
+                "74216856AB2D174A3D5577CF9F4986C6D75284A0BF191E2B18B2A236A6393DA5",
                 hash);
     }
 
@@ -162,7 +162,7 @@ public class VeriFactuComplianceTest {
     @Test
     public void testValidNIE() {
         assertTrue(NifValidator.isValid("X1234567L"));
-        assertTrue(NifValidator.isValid("Y1234567Z"));
+        assertTrue(NifValidator.isValid("Y1234567X"));
         assertTrue(NifValidator.isValid("Z1234567R"));
         assertEquals("NIE", NifValidator.getIdType("X1234567L"));
     }

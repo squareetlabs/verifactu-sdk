@@ -264,7 +264,7 @@ public class Invoice implements VeriFactuInvoice {
 
         String fecha = issueDate.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"));
 
-        return String.format("%s?nif=%s&numserie=%s&fecha=%s&importe=%.2f",
+        return String.format(java.util.Locale.US, "%s?nif=%s&numserie=%s&fecha=%s&importe=%.2f",
                 baseUrl,
                 issuerTaxId,
                 invoiceNumber,
