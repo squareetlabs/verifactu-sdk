@@ -1,0 +1,126 @@
+[INFO] Error stacktraces are turned on.
+[INFO] Scanning for projects...
+[INFO] 
+[INFO] ------------------< com.squareetlabs:verifactu-java >-------------------
+[INFO] Building verifactu-java 1.0.0
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- cxf-codegen-plugin:3.5.7:wsdl2java (generate-sources) @ verifactu-java ---
+[INFO] Running code generation in fork mode...
+[INFO] The java executable is /Library/Java/JavaVirtualMachines/amazon-corretto-21.jdk/Contents/Home/bin/java
+[INFO] Building jar: /var/folders/qc/h4qzdkpn6d9fmjt9q1q2fqyh0000gn/T/cxf-tmp-9551430725475143950/cxf-codegen17097299329056682132.jar
+[WARNING] SLF4J: Failed to load class "org.slf4j.impl.StaticLoggerBinder".
+[WARNING] SLF4J: Defaulting to no-operation (NOP) logger implementation
+[WARNING] SLF4J: See http://www.slf4j.org/codes.html#StaticLoggerBinder for further details.
+[WARNING] [Fatal Error] xmldsig-core-schema.xsd:10:5: DTD externa: fallo al leer DTD externa 'XMLSchema.dtd' porque el acceso a 'http' no está permitido debido a una restricción que ha definido la propiedad accessExternalDTD.
+[WARNING] Exception in thread "main" org.apache.cxf.tools.common.ToolException: org.apache.ws.commons.schema.XmlSchemaException: DTD externa: fallo al leer DTD externa 'XMLSchema.dtd' porque el acceso a 'http' no está permitido debido a una restricción que ha definido la propiedad accessExternalDTD.
+[WARNING] 	at org.apache.cxf.tools.validator.internal.WSDLRefValidator.processSchemas(WSDLRefValidator.java:132)
+[WARNING] 	at org.apache.cxf.tools.validator.internal.WSDLRefValidator.<init>(WSDLRefValidator.java:108)
+[WARNING] 	at org.apache.cxf.tools.validator.internal.WSDL11Validator.isValid(WSDL11Validator.java:120)
+[WARNING] 	at org.apache.cxf.tools.wsdlto.frontend.jaxws.wsdl11.JAXWSDefinitionBuilder.validate(JAXWSDefinitionBuilder.java:207)
+[WARNING] 	at org.apache.cxf.tools.wsdlto.WSDLToJavaContainer.processWsdl(WSDLToJavaContainer.java:193)
+[WARNING] 	at org.apache.cxf.tools.wsdlto.WSDLToJavaContainer.execute(WSDLToJavaContainer.java:156)
+[WARNING] 	at org.apache.cxf.tools.wsdlto.WSDLToJavaContainer.execute(WSDLToJavaContainer.java:402)
+[WARNING] 	at org.apache.cxf.tools.common.toolspec.ToolRunner.runTool(ToolRunner.java:105)
+[WARNING] 	at org.apache.cxf.tools.wsdlto.WSDLToJava.run(WSDLToJava.java:113)
+[WARNING] 	at org.apache.cxf.tools.wsdlto.WSDLToJava.run(WSDLToJava.java:86)
+[WARNING] 	at org.apache.cxf.maven_plugin.wsdl2java.ForkOnceWSDL2Java.main(ForkOnceWSDL2Java.java:51)
+[WARNING] Caused by: org.apache.ws.commons.schema.XmlSchemaException: DTD externa: fallo al leer DTD externa 'XMLSchema.dtd' porque el acceso a 'http' no está permitido debido a una restricción que ha definido la propiedad accessExternalDTD.
+[WARNING] 	at org.apache.ws.commons.schema.XmlSchemaCollection.read(XmlSchemaCollection.java:724)
+[WARNING] 	at org.apache.ws.commons.schema.SchemaBuilder.resolveXmlSchema(SchemaBuilder.java:703)
+[WARNING] 	at org.apache.ws.commons.schema.SchemaBuilder.handleImport(SchemaBuilder.java:536)
+[WARNING] 	at org.apache.ws.commons.schema.SchemaBuilder.handleSchemaElementChild(SchemaBuilder.java:1524)
+[WARNING] 	at org.apache.ws.commons.schema.SchemaBuilder.handleXmlSchemaElement(SchemaBuilder.java:656)
+[WARNING] 	at org.apache.ws.commons.schema.SchemaBuilder.build(SchemaBuilder.java:154)
+[WARNING] 	at org.apache.ws.commons.schema.XmlSchemaCollection.read(XmlSchemaCollection.java:510)
+[WARNING] 	at org.apache.ws.commons.schema.XmlSchemaCollection.read(XmlSchemaCollection.java:718)
+[WARNING] 	at org.apache.ws.commons.schema.SchemaBuilder.resolveXmlSchema(SchemaBuilder.java:703)
+[WARNING] 	at org.apache.ws.commons.schema.SchemaBuilder.handleImport(SchemaBuilder.java:536)
+[WARNING] 	at org.apache.ws.commons.schema.SchemaBuilder.handleSchemaElementChild(SchemaBuilder.java:1524)
+[WARNING] 	at org.apache.ws.commons.schema.SchemaBuilder.handleXmlSchemaElement(SchemaBuilder.java:656)
+[WARNING] 	at org.apache.ws.commons.schema.XmlSchemaCollection.read(XmlSchemaCollection.java:552)
+[WARNING] 	at org.apache.cxf.common.xmlschema.SchemaCollection.read(SchemaCollection.java:129)
+[WARNING] 	at org.apache.cxf.wsdl11.SchemaUtil.extractSchema(SchemaUtil.java:145)
+[WARNING] 	at org.apache.cxf.wsdl11.SchemaUtil.getSchemas(SchemaUtil.java:74)
+[WARNING] 	at org.apache.cxf.tools.validator.internal.WSDLRefValidator.getSchemas(WSDLRefValidator.java:114)
+[WARNING] 	at org.apache.cxf.tools.validator.internal.WSDLRefValidator.processSchemas(WSDLRefValidator.java:126)
+[WARNING] 	... 10 more
+[WARNING] Caused by: org.xml.sax.SAXParseExceptionpublicId: file:/Volumes/Storage/workspacephp/LaravelVerifactu/java-verifactu/src/main/resources/xmldsig-core-schema.xsd; systemId: file:/Volumes/Storage/workspacephp/LaravelVerifactu/java-verifactu/src/main/resources/xmldsig-core-schema.xsd; lineNumber: 10; columnNumber: 5; DTD externa: fallo al leer DTD externa 'XMLSchema.dtd' porque el acceso a 'http' no está permitido debido a una restricción que ha definido la propiedad accessExternalDTD.
+[WARNING] 	at java.xml/com.sun.org.apache.xerces.internal.parsers.DOMParser.parse(DOMParser.java:262)
+[WARNING] 	at java.xml/com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderImpl.parse(DocumentBuilderImpl.java:342)
+[WARNING] 	at org.apache.ws.commons.schema.XmlSchemaCollection$2.run(XmlSchemaCollection.java:750)
+[WARNING] 	at org.apache.ws.commons.schema.XmlSchemaCollection$2.run(XmlSchemaCollection.java:748)
+[WARNING] 	at java.base/java.security.AccessController.doPrivileged(AccessController.java:571)
+[WARNING] 	at org.apache.ws.commons.schema.XmlSchemaCollection.parseDoPriv(XmlSchemaCollection.java:748)
+[WARNING] 	at org.apache.ws.commons.schema.XmlSchemaCollection.read(XmlSchemaCollection.java:717)
+[WARNING] 	... 27 more
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  2.013 s
+[INFO] Finished at: 2026-01-20T13:37:50+01:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.cxf:cxf-codegen-plugin:3.5.7:wsdl2java (generate-sources) on project verifactu-java: 
+[ERROR] Exit code: 1
+[ERROR] Command line was: /Library/Java/JavaVirtualMachines/amazon-corretto-21.jdk/Contents/Home/bin/java --add-exports=jdk.xml.dom/org.w3c.dom.html=ALL-UNNAMED --add-exports=java.xml/com.sun.org.apache.xerces.internal.impl.xs=ALL-UNNAMED --add-opens java.base/java.security=ALL-UNNAMED --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.util.concurrent=ALL-UNNAMED -jar /var/folders/qc/h4qzdkpn6d9fmjt9q1q2fqyh0000gn/T/cxf-tmp-9551430725475143950/cxf-codegen17097299329056682132.jar /var/folders/qc/h4qzdkpn6d9fmjt9q1q2fqyh0000gn/T/cxf-tmp-9551430725475143950/cxf-w2j1345662422185554267args
+[ERROR] 
+[ERROR] 
+[ERROR] -> [Help 1]
+org.apache.maven.lifecycle.LifecycleExecutionException: Failed to execute goal org.apache.cxf:cxf-codegen-plugin:3.5.7:wsdl2java (generate-sources) on project verifactu-java: 
+Exit code: 1
+Command line was: /Library/Java/JavaVirtualMachines/amazon-corretto-21.jdk/Contents/Home/bin/java --add-exports=jdk.xml.dom/org.w3c.dom.html=ALL-UNNAMED --add-exports=java.xml/com.sun.org.apache.xerces.internal.impl.xs=ALL-UNNAMED --add-opens java.base/java.security=ALL-UNNAMED --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.util.concurrent=ALL-UNNAMED -jar /var/folders/qc/h4qzdkpn6d9fmjt9q1q2fqyh0000gn/T/cxf-tmp-9551430725475143950/cxf-codegen17097299329056682132.jar /var/folders/qc/h4qzdkpn6d9fmjt9q1q2fqyh0000gn/T/cxf-tmp-9551430725475143950/cxf-w2j1345662422185554267args
+
+
+    at org.apache.maven.lifecycle.internal.MojoExecutor.execute (MojoExecutor.java:215)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.execute (MojoExecutor.java:156)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.execute (MojoExecutor.java:148)
+    at org.apache.maven.lifecycle.internal.LifecycleModuleBuilder.buildProject (LifecycleModuleBuilder.java:117)
+    at org.apache.maven.lifecycle.internal.LifecycleModuleBuilder.buildProject (LifecycleModuleBuilder.java:81)
+    at org.apache.maven.lifecycle.internal.builder.singlethreaded.SingleThreadedBuilder.build (SingleThreadedBuilder.java:56)
+    at org.apache.maven.lifecycle.internal.LifecycleStarter.execute (LifecycleStarter.java:128)
+    at org.apache.maven.DefaultMaven.doExecute (DefaultMaven.java:305)
+    at org.apache.maven.DefaultMaven.doExecute (DefaultMaven.java:192)
+    at org.apache.maven.DefaultMaven.execute (DefaultMaven.java:105)
+    at org.apache.maven.cli.MavenCli.execute (MavenCli.java:957)
+    at org.apache.maven.cli.MavenCli.doMain (MavenCli.java:289)
+    at org.apache.maven.cli.MavenCli.main (MavenCli.java:193)
+    at jdk.internal.reflect.DirectMethodHandleAccessor.invoke (DirectMethodHandleAccessor.java:103)
+    at java.lang.reflect.Method.invoke (Method.java:580)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.launchEnhanced (Launcher.java:282)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.launch (Launcher.java:225)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.mainWithExitCode (Launcher.java:406)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.main (Launcher.java:347)
+Caused by: org.apache.maven.plugin.MojoExecutionException: 
+Exit code: 1
+Command line was: /Library/Java/JavaVirtualMachines/amazon-corretto-21.jdk/Contents/Home/bin/java --add-exports=jdk.xml.dom/org.w3c.dom.html=ALL-UNNAMED --add-exports=java.xml/com.sun.org.apache.xerces.internal.impl.xs=ALL-UNNAMED --add-opens java.base/java.security=ALL-UNNAMED --add-opens java.base/java.net=ALL-UNNAMED --add-opens java.base/java.lang=ALL-UNNAMED --add-opens java.base/java.util=ALL-UNNAMED --add-opens java.base/java.util.concurrent=ALL-UNNAMED -jar /var/folders/qc/h4qzdkpn6d9fmjt9q1q2fqyh0000gn/T/cxf-tmp-9551430725475143950/cxf-codegen17097299329056682132.jar /var/folders/qc/h4qzdkpn6d9fmjt9q1q2fqyh0000gn/T/cxf-tmp-9551430725475143950/cxf-w2j1345662422185554267args
+
+
+    at org.apache.cxf.maven_plugin.AbstractCodegenMojo.runForked (AbstractCodegenMojo.java:688)
+    at org.apache.cxf.maven_plugin.AbstractCodegenMojo.forkOnce (AbstractCodegenMojo.java:550)
+    at org.apache.cxf.maven_plugin.AbstractCodegenMojo.execute (AbstractCodegenMojo.java:268)
+    at org.apache.cxf.maven_plugin.wsdl2java.WSDL2JavaMojo.execute (WSDL2JavaMojo.java:501)
+    at org.apache.maven.plugin.DefaultBuildPluginManager.executeMojo (DefaultBuildPluginManager.java:137)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.execute (MojoExecutor.java:210)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.execute (MojoExecutor.java:156)
+    at org.apache.maven.lifecycle.internal.MojoExecutor.execute (MojoExecutor.java:148)
+    at org.apache.maven.lifecycle.internal.LifecycleModuleBuilder.buildProject (LifecycleModuleBuilder.java:117)
+    at org.apache.maven.lifecycle.internal.LifecycleModuleBuilder.buildProject (LifecycleModuleBuilder.java:81)
+    at org.apache.maven.lifecycle.internal.builder.singlethreaded.SingleThreadedBuilder.build (SingleThreadedBuilder.java:56)
+    at org.apache.maven.lifecycle.internal.LifecycleStarter.execute (LifecycleStarter.java:128)
+    at org.apache.maven.DefaultMaven.doExecute (DefaultMaven.java:305)
+    at org.apache.maven.DefaultMaven.doExecute (DefaultMaven.java:192)
+    at org.apache.maven.DefaultMaven.execute (DefaultMaven.java:105)
+    at org.apache.maven.cli.MavenCli.execute (MavenCli.java:957)
+    at org.apache.maven.cli.MavenCli.doMain (MavenCli.java:289)
+    at org.apache.maven.cli.MavenCli.main (MavenCli.java:193)
+    at jdk.internal.reflect.DirectMethodHandleAccessor.invoke (DirectMethodHandleAccessor.java:103)
+    at java.lang.reflect.Method.invoke (Method.java:580)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.launchEnhanced (Launcher.java:282)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.launch (Launcher.java:225)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.mainWithExitCode (Launcher.java:406)
+    at org.codehaus.plexus.classworlds.launcher.Launcher.main (Launcher.java:347)
+[ERROR] 
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoExecutionException
