@@ -131,8 +131,15 @@ public class AeatClient {
                 registroAlta.setDestinatarios(dests);
             }
 
+            // Third-party issuance (EmitidaPorTerceroODestinatario / Tercero):
+            // only sent when this specific invoice was issued by a third party
+            // (e.g. Odei issuing on behalf of its client) or by the recipient
+            // itself (self-billing). Most invoices leave this unset because
+            // the obligado issues its own invoices.
+            applyThirdPartyIssuance(registroAlta, invoice);
+
             // System Info
-            registroAlta.setSistemaInformatico(buildSystemInfo());
+            registroAlta.setSistemaInformatico(buildSystemInfo(invoice));
 
             // Timestamp and Hash
             registroAlta.setFechaHoraHusoGenRegistro(tsXml);
@@ -161,37 +168,26 @@ public class AeatClient {
             }
 
             if (invoice.getCorrectionType() != null) {
-                try {
-                    // TODO: Uncomment when WSDL is updated to support TipoRectificativa and
-                    // ImporteRectificacion
-                    /*
-                     * registroAlta.setTipoRectificativa(invoice.getCorrectionType());
-                     * 
-                     * // Add ImporteRectificacion block if required
-                     * if ("S".equals(invoice.getCorrectionType()) &&
-                     * isCorrectiveInvoice(tipoFactura)) {
-                     * Map<String, String> importeRectificacion =
-                     * buildImporteRectificacion(invoice);
-                     * if (importeRectificacion != null) {
-                     * // Create ImporteRectificacion object
-                     * try {
-                     * RegistroFacturacionAltaType.ImporteRectificacion importe = new
-                     * RegistroFacturacionAltaType.ImporteRectificacion();
-                     * importe.setBaseRectificada(importeRectificacion.get("BaseRectificada"));
-                     * importe.setCuotaRectificada(importeRectificacion.get("CuotaRectificada"));
-                     * if (importeRectificacion.containsKey("CuotaRecargoRectificado")) {
-                     * importe.setCuotaRecargoRectificado(
-                     * importeRectificacion.get("CuotaRecargoRectificado"));
-                     * }
-                     * registroAlta.setImporteRectificacion(importe);
-                     * } catch (Exception e) {
-                     * // ImporteRectificacion not available in XSD
-                     * }
-                     * }
-                     * }
-                     */
-                } catch (Exception e) {
-                    // TipoRectificativa not available in XSD
+                // TipoRectificativa (S = Sustitución, I = Por diferencia). Both
+                // ClaveTipoRectificativaType and DesgloseRectificacionType are
+                // top-level types already present in SuministroInformacion.xsd
+                // / SistemaFacturacion.wsdl, so no WSDL upgrade is required.
+                registroAlta.setTipoRectificativa(ClaveTipoRectificativaType.fromValue(invoice.getCorrectionType()));
+
+                // ImporteRectificacion block: required for substitution-type
+                // corrective invoices (R1-R5 with correctionType = "S").
+                if ("S".equals(invoice.getCorrectionType()) && isCorrectiveInvoice(tipoFactura)) {
+                    Map<String, String> importeRectificacion = buildImporteRectificacion(invoice);
+                    if (importeRectificacion != null) {
+                        DesgloseRectificacionType importe = new DesgloseRectificacionType();
+                        importe.setBaseRectificada(importeRectificacion.get("BaseRectificada"));
+                        importe.setCuotaRectificada(importeRectificacion.get("CuotaRectificada"));
+                        if (importeRectificacion.containsKey("CuotaRecargoRectificado")) {
+                            importe.setCuotaRecargoRectificado(
+                                    importeRectificacion.get("CuotaRecargoRectificado"));
+                        }
+                        registroAlta.setImporteRectificacion(importe);
+                    }
                 }
             }
 
@@ -228,6 +224,22 @@ public class AeatClient {
         obligado.setNombreRazon(issuerName);
         obligado.setNIF(issuerVat);
         cabecera.setObligadoEmision(obligado);
+
+        // Representante (Cabecera.Representante): only sent when this SDK
+        // instance is configured with representative data, i.e. when Odei (or
+        // any other integrator) is remitting these records on behalf of the
+        // "obligado tributario" under apoderamiento or colaboración social.
+        // IMPORTANT: filling this field without the corresponding legal
+        // authorization (apoderamiento inscrito or Convenio de colaboración
+        // social 017) in place is a compliance violation - see AEAT FAQs on
+        // "Representación de los OEF por parte de las empresas de software".
+        if (config.hasRepresentative()) {
+            PersonaFisicaJuridicaESType representante = new PersonaFisicaJuridicaESType();
+            representante.setNombreRazon(config.getRepresentativeName());
+            representante.setNIF(config.getRepresentativeVat());
+            cabecera.setRepresentante(representante);
+        }
+
         return cabecera;
     }
 
@@ -346,7 +358,7 @@ public class AeatClient {
         return list;
     }
 
-    private SistemaInformaticoType buildSystemInfo() {
+    private SistemaInformaticoType buildSystemInfo(VeriFactuInvoice invoice) {
         SistemaInformaticoType si = new SistemaInformaticoType();
         si.setNombreRazon(config.getDeveloperName());
         si.setNIF(config.getDeveloperNif());
@@ -356,8 +368,57 @@ public class AeatClient {
         si.setNumeroInstalacion(config.getInstallationNumber());
         si.setTipoUsoPosibleSoloVerifactu(SiNoType.fromValue(config.getOnlyVerifactuCapable()));
         si.setTipoUsoPosibleMultiOT(SiNoType.fromValue(config.getMultiObligatedCapable()));
-        si.setIndicadorMultiplesOT(SiNoType.fromValue(config.getHasMultipleObligated()));
+
+        // IndicadorMultiplesOT MUST be computed automatically per record (per
+        // client/tenant), never fixed by the developer or the end user. If the
+        // invoice provides its own value (e.g. a multi-tenant SaaS backend
+        // that knows how many "facturaciones" this specific client has),
+        // honor it; otherwise fall back to the static config default (correct
+        // for single-tenant integrations where there is only ever one OT).
+        Boolean perInvoiceIndicator = invoice.getMultipleObligatedIndicator();
+        String indicadorMultiplesOT = perInvoiceIndicator != null
+                ? (perInvoiceIndicator ? "S" : "N")
+                : config.getHasMultipleObligated();
+        si.setIndicadorMultiplesOT(SiNoType.fromValue(indicadorMultiplesOT));
+
         return si;
+    }
+
+    /**
+     * Fills {@code EmitidaPorTerceroODestinatario} and {@code Tercero} when
+     * this invoice was NOT issued by the obligado itself.
+     * <ul>
+     * <li>{@code "T"} (Tercero): a third party - e.g. Odei - issued the
+     * invoice on behalf of the obligado. Requires
+     * {@link VeriFactuInvoice#getThirdPartyName()} and
+     * {@link VeriFactuInvoice#getThirdPartyTaxId()}.</li>
+     * <li>{@code "D"} (Destinatario): self-billing, the recipient issued the
+     * invoice. No {@code Tercero} block is needed in this case, since the
+     * recipient is already identified in {@code Destinatarios}.</li>
+     * </ul>
+     * Left untouched (both fields omitted) for the common case where the
+     * issuer expide su propia factura.
+     */
+    private void applyThirdPartyIssuance(RegistroFacturacionAltaType registroAlta, VeriFactuInvoice invoice) {
+        String issuedBy = invoice.getIssuedByThirdPartyOrRecipient();
+        if (issuedBy == null || issuedBy.trim().isEmpty()) {
+            return;
+        }
+
+        registroAlta.setEmitidaPorTerceroODestinatario(TercerosODestinatarioType.fromValue(issuedBy));
+
+        if ("T".equals(issuedBy)) {
+            String thirdPartyName = invoice.getThirdPartyName();
+            String thirdPartyTaxId = invoice.getThirdPartyTaxId();
+            if (thirdPartyName == null || thirdPartyTaxId == null) {
+                throw new IllegalArgumentException(
+                        "thirdPartyName and thirdPartyTaxId are required when issuedByThirdPartyOrRecipient = \"T\"");
+            }
+            PersonaFisicaJuridicaType tercero = new PersonaFisicaJuridicaType();
+            tercero.setNombreRazon(thirdPartyName);
+            tercero.setNIF(thirdPartyTaxId);
+            registroAlta.setTercero(tercero);
+        }
     }
 
     private Map<String, Object> performSoapCall(CabeceraType cabecera, List<RegistroFacturaType> registros,

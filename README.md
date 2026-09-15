@@ -313,10 +313,14 @@ invoice.setBreakdowns(Arrays.asList(breakdown));
 - `subsanationDate`: Fecha de subsanación
 - `rejectionCode`: Código de rechazo AEAT
 
-### Campos multi-tenant
+### Campos de representación de terceros (VeriFactuConfig / Invoice)
 
-- `installationId`: ID de la instalación (para múltiples instalaciones)
-- `deviceId`: ID del dispositivo emisor
+Ver la sección [Facturación en representación de terceros](#facturación-en-representación-de-terceros) más abajo.
+
+- `VeriFactuConfig.representativeName` / `representativeVat`: identidad del representante que remite el fichero a la AEAT en nombre del obligado (`Cabecera.Representante`)
+- `Invoice.issuedByThirdPartyOrRecipient`: `"T"` (tercero) o `"D"` (autofactura por el destinatario); `null` cuando el propio obligado emite la factura (`RegistroFacturacionAltaType.EmitidaPorTerceroODestinatario`)
+- `Invoice.thirdPartyName` / `thirdPartyTaxId`: identidad del tercero que expide la factura, requerido cuando `issuedByThirdPartyOrRecipient = "T"` (`RegistroFacturacionAltaType.Tercero`)
+- `Invoice.multipleObligatedIndicator`: override por factura de `SistemaInformatico.IndicadorMultiplesOT`, para plataformas SaaS multi-cliente donde este valor difiere por cliente/tenant
 
 ### Campos de estado de respuesta AEAT
 
@@ -329,8 +333,62 @@ invoice.setBreakdowns(Arrays.asList(breakdown));
 
 - `description`: Descripción de la factura
 - `simplified`: Indica si es factura simplificada
-- `thirdPartyIssuer`: Indica si la factura es emitida por tercero
-- `macroInvoice`: Indica si es una macro-factura
+
+## Facturación en representación de terceros
+
+VeriFactu contempla **tres mecanismos distintos** de "representación", todos opcionales e independientes entre sí. Ninguno se activa a menos que lo configures explícitamente.
+
+> ⚠️ Rellenar `Representante` sin tener la autorización legal correspondiente
+> (apoderamiento inscrito en el registro de apoderamientos, o Convenio de
+> colaboración social Tipo 017 con los modelos normalizados firmados según la
+> Resolución de la AEAT de 18-dic-2024) es un incumplimiento. Consulta con tu
+> asesoría fiscal antes de activarlo en producción.
+
+### 1. Quién remite el fichero a la AEAT (`Cabecera.Representante`)
+
+Cuando tu plataforma (p. ej. una empresa de software o gestoría) envía los registros de facturación a la AEAT en nombre de tus clientes, en lugar de que cada cliente lo haga con su propio certificado:
+
+```java
+VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678"); // el obligado tributario
+config.setRepresentativeName("Odei Software S.L.");   // quien remite el fichero
+config.setRepresentativeVat("B87654321");
+
+// El certPath/certPassword del AeatClient debe ser el certificado cualificado
+// del REPRESENTANTE (Odei), no el del cliente, ya que es quien se autentica
+// frente a la Sede Electrónica de la AEAT.
+AeatClient client = new AeatClient("/path/to/odei-cert.p12", "password", config, false, true);
+```
+
+### 2. Quién emite la factura (`Tercero` / `EmitidaPorTerceroODestinatario`)
+
+Cuando la factura la expide materialmente un tercero en nombre del obligado (no solo el envío del fichero, sino la propia emisión de la factura):
+
+```java
+Invoice invoice = new Invoice();
+invoice.setIssuerTaxId("B12345678"); // el obligado a expedir factura (el cliente)
+// ...
+
+invoice.setIssuedByThirdPartyOrRecipient("T"); // "T" = Tercero, "D" = autofactura por el destinatario
+invoice.setThirdPartyName("Odei Software S.L.");
+invoice.setThirdPartyTaxId("B87654321");
+```
+
+Deja `issuedByThirdPartyOrRecipient` sin establecer (`null`, valor por defecto) en el caso habitual en que el propio obligado emite su factura.
+
+### 3. Sistema multi-cliente / SaaS (`IndicadorMultiplesOT`)
+
+`SistemaInformatico.IndicadorMultiplesOT` **debe calcularse automáticamente por cliente en cada envío** (nunca fijarse a mano por el usuario). Si tu backend gestiona la facturación de varios obligados tributarios distintos (o de un mismo obligado con varias "facturaciones" independientes), calcula tú mismo el valor para ese cliente concreto y pásalo por factura:
+
+```java
+// Además, declara la capacidad estructural del sistema una sola vez:
+config.setMultiObligatedCapable("S"); // el SIF puede llevar la facturación de varios OT
+
+// Y, por cada factura, informa el indicador dinámico según ESE cliente:
+boolean esteClienteTieneMasDeUnaFacturacionEnElSaaS = /* tu lógica de negocio */ true;
+invoice.setMultipleObligatedIndicator(esteClienteTieneMasDeUnaFacturacionEnElSaaS);
+```
+
+Si no se informa `multipleObligatedIndicator` en la factura, el SDK usa como respaldo `VeriFactuConfig.getHasMultipleObligated()` (pensado para integraciones de un solo cliente).
 
 ## Envío de factura a AEAT
 
