@@ -144,4 +144,70 @@ public interface VeriFactuInvoice {
      * @return Double or null
      */
     Double getCorrectedSurchargeAmount();
+
+    /**
+     * Whether this invoice record was NOT issued by the "obligado a expedir
+     * factura" (issuer) itself, and if so, by whom. Maps to
+     * {@code RegistroFacturacionAltaType.EmitidaPorTerceroODestinatario}.
+     * <p>
+     * Valid values:
+     * <ul>
+     * <li>{@code null} (default): the issuer expedía la factura por sí mismo.
+     * No se rellena.</li>
+     * <li>{@code "T"} (Tercero): la factura fue expedida por un tercero (p.
+     * ej. Odei actuando en representación de su cliente) en nombre del
+     * obligado. Requiere {@link #getThirdPartyName()} y
+     * {@link #getThirdPartyTaxId()}.</li>
+     * <li>{@code "D"} (Destinatario): autofacturación, la factura fue
+     * expedida por el propio destinatario/cliente de la operación.</li>
+     * </ul>
+     *
+     * @return "T", "D" or null
+     */
+    default String getIssuedByThirdPartyOrRecipient() {
+        return null;
+    }
+
+    /**
+     * Get the name of the third party that issued the invoice on behalf of
+     * the obligado (required when {@link #getIssuedByThirdPartyOrRecipient()}
+     * is {@code "T"}). Maps to {@code RegistroFacturacionAltaType.Tercero.NombreRazon}.
+     *
+     * @return String or null
+     */
+    default String getThirdPartyName() {
+        return null;
+    }
+
+    /**
+     * Get the tax ID (NIF) of the third party that issued the invoice on
+     * behalf of the obligado (required when
+     * {@link #getIssuedByThirdPartyOrRecipient()} is {@code "T"}). Maps to
+     * {@code RegistroFacturacionAltaType.Tercero.NIF}.
+     *
+     * @return String or null
+     */
+    default String getThirdPartyTaxId() {
+        return null;
+    }
+
+    /**
+     * Get the per-invoice override for {@code SistemaInformatico.IndicadorMultiplesOT}.
+     * <p>
+     * The AEAT requires this flag to be computed automatically for each
+     * record, based on whether the system currently manages more than one
+     * "facturación" for the client that owns this specific invoice - it must
+     * never be a value fixed by the developer or the end user. In a
+     * multi-tenant SaaS backend this typically differs per client/tenant, so
+     * it cannot be a single static configuration value.
+     * <p>
+     * Return {@code true}/{@code false} to explicitly set it for this
+     * invoice, or {@code null} to fall back to
+     * {@link com.squareetlabs.verifactu.services.VeriFactuConfig#getHasMultipleObligated()}.
+     *
+     * @return Boolean or null
+     */
+    default Boolean getMultipleObligatedIndicator() {
+        return null;
+    }
 }

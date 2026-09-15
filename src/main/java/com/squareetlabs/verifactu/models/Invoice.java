@@ -30,6 +30,13 @@ public class Invoice implements VeriFactuInvoice {
     private Double correctedTaxAmount;
     private Double correctedSurchargeAmount;
 
+    // Third-party issuance (EmitidaPorTerceroODestinatario / Tercero) and
+    // per-invoice multi-tenant indicator (IndicadorMultiplesOT override)
+    private String issuedByThirdPartyOrRecipient;
+    private String thirdPartyName;
+    private String thirdPartyTaxId;
+    private Boolean multipleObligatedIndicator;
+
     @Override
     public String getInvoiceNumber() {
         return invoiceNumber;
@@ -242,6 +249,60 @@ public class Invoice implements VeriFactuInvoice {
 
     public void setCorrectedSurchargeAmount(Double correctedSurchargeAmount) {
         this.correctedSurchargeAmount = correctedSurchargeAmount;
+    }
+
+    @Override
+    public String getIssuedByThirdPartyOrRecipient() {
+        return issuedByThirdPartyOrRecipient;
+    }
+
+    /**
+     * Marks this invoice as issued by a third party ("T") or by the
+     * recipient itself / self-billing ("D"), instead of by the obligado
+     * itself. Pass {@code null} (default) when the issuer expide la factura
+     * por sí mismo.
+     *
+     * @param issuedByThirdPartyOrRecipient "T", "D" or null
+     */
+    public void setIssuedByThirdPartyOrRecipient(String issuedByThirdPartyOrRecipient) {
+        this.issuedByThirdPartyOrRecipient = issuedByThirdPartyOrRecipient;
+    }
+
+    @Override
+    public String getThirdPartyName() {
+        return thirdPartyName;
+    }
+
+    public void setThirdPartyName(String thirdPartyName) {
+        this.thirdPartyName = thirdPartyName;
+    }
+
+    @Override
+    public String getThirdPartyTaxId() {
+        return thirdPartyTaxId;
+    }
+
+    public void setThirdPartyTaxId(String thirdPartyTaxId) {
+        this.thirdPartyTaxId = thirdPartyTaxId;
+    }
+
+    @Override
+    public Boolean getMultipleObligatedIndicator() {
+        return multipleObligatedIndicator;
+    }
+
+    /**
+     * Per-invoice override for {@code IndicadorMultiplesOT}. Set this to the
+     * value computed by your backend for the specific client/tenant that
+     * owns this invoice (true when that client currently has more than one
+     * "facturación" registered in your multi-tenant system). Leave as
+     * {@code null} to fall back to
+     * {@link com.squareetlabs.verifactu.services.VeriFactuConfig#getHasMultipleObligated()}.
+     *
+     * @param multipleObligatedIndicator Boolean or null
+     */
+    public void setMultipleObligatedIndicator(Boolean multipleObligatedIndicator) {
+        this.multipleObligatedIndicator = multipleObligatedIndicator;
     }
 
     /**
