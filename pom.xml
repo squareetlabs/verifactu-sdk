@@ -7,7 +7,34 @@
   <version>1.1.0</version>
   <name>verifactu</name>
   <description>Java package for VeriFactu electronic invoicing management (AEAT)</description>
-  <url>https://www.squareet.com</url>
+  <url>https://github.com/squareetlabs/verifactu-sdk</url>
+
+  <licenses>
+    <license>
+      <name>MIT License</name>
+      <url>https://github.com/squareetlabs/verifactu-sdk/blob/main/LICENSE</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <name>Alberto Rial Barreiro</name>
+      <organization>SquareetLabs</organization>
+      <organizationUrl>https://www.squareet.com</organizationUrl>
+    </developer>
+    <developer>
+      <name>Jacobo Cantorna Cigarran</name>
+      <organization>SquareetLabs</organization>
+      <organizationUrl>https://www.squareet.com</organizationUrl>
+    </developer>
+  </developers>
+
+  <scm>
+    <connection>scm:git:git://github.com/squareetlabs/verifactu-sdk.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/squareetlabs/verifactu-sdk.git</developerConnection>
+    <url>https://github.com/squareetlabs/verifactu-sdk</url>
+  </scm>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -80,14 +107,6 @@
     </dependency>
   </dependencies>
 
-  <distributionManagement>
-    <repository>
-      <id>github</id>
-      <name>GitHub SquareetLabs Apache Maven Packages</name>
-      <url>https://maven.pkg.github.com/squareetlabs/verifactu-sdk</url>
-    </repository>
-  </distributionManagement>
-
   <build>
     <plugins>
       <plugin>
@@ -153,4 +172,62 @@
       </plugin>
     </plugins>
   </build>
+
+  <!--
+    Perfil "release": firma GPG y publicacion en Maven Central.
+    No se activa por defecto, para no exigir claves GPG a quien solo compila
+    o ejecuta tests en local. Se invoca explicitamente en CI con "-P release".
+    Requiere:
+      - Un servidor "central" en settings.xml (usuario/token del Central
+        Publisher Portal, https://central.sonatype.com), generado por
+        actions/setup-java a partir de los secretos CENTRAL_USERNAME y
+        CENTRAL_PASSWORD.
+      - Una clave GPG importada por actions/setup-java (secreto
+        GPG_PRIVATE_KEY) y su passphrase en la variable de entorno
+        GPG_PASSPHRASE (secreto GPG_PASSPHRASE).
+  -->
+  <profiles>
+    <profile>
+      <id>release</id>
+      <build>
+        <plugins>
+          <!-- Firma GPG de todos los artefactos (jar, sources, javadoc, pom) -->
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-gpg-plugin</artifactId>
+            <version>3.2.8</version>
+            <executions>
+              <execution>
+                <id>sign-artifacts</id>
+                <phase>verify</phase>
+                <goals>
+                  <goal>sign</goal>
+                </goals>
+              </execution>
+            </executions>
+          </plugin>
+
+          <!-- Empaqueta y publica en el Central Publisher Portal -->
+          <plugin>
+            <groupId>org.sonatype.central</groupId>
+            <artifactId>central-publishing-maven-plugin</artifactId>
+            <version>0.11.0</version>
+            <extensions>true</extensions>
+            <configuration>
+              <publishingServerId>central</publishingServerId>
+              <!--
+                Manual la primera vez: tras "mvn deploy" hay que entrar en
+                https://central.sonatype.com/publishing/deployments y pulsar
+                "Publish" cuando la validacion termine en OK. Una vez
+                comprobado que el pipeline funciona, se puede poner en true
+                para que el release quede totalmente automatizado.
+              -->
+              <autoPublish>false</autoPublish>
+              <waitUntil>validated</waitUntil>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

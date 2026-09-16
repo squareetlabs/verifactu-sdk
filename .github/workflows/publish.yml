@@ -1,11 +1,24 @@
 name: Publish Package
 
-# Unico workflow de publicacion. No duplicar este job en otro workflow:
-# GitHub Packages rechaza republicar una version de artefacto ya existente
-# (respuesta 4xx en "mvn deploy"), asi que dos workflows publicando la misma
-# coordenada groupId:artifactId:version en el mismo evento "release" siempre
-# terminan con al menos un fallo. Antes de crear un release, recuerda subir
-# <version> en pom.xml a un valor que no se haya publicado todavia.
+# Unico workflow de publicacion. No duplicar este job en otro workflow.
+#
+# Publica en Maven Central (Central Publisher Portal, central.sonatype.com)
+# a traves del perfil "release" del pom.xml, que firma los artefactos con GPG
+# y los sube con central-publishing-maven-plugin. Maven Central rechaza
+# republicar una version de artefacto ya existente, asi que antes de crear un
+# release recuerda subir <version> en pom.xml a un valor que no se haya
+# publicado todavia.
+#
+# Secretos requeridos en el repositorio (Settings > Secrets and variables > Actions):
+#   - CENTRAL_USERNAME  -> usuario del token generado en central.sonatype.com
+#   - CENTRAL_PASSWORD  -> password del token generado en central.sonatype.com
+#   - GPG_PRIVATE_KEY   -> clave privada GPG (bloque ASCII-armored completo)
+#   - GPG_PASSPHRASE    -> passphrase de la clave GPG anterior
+#
+# El pom.xml esta configurado con autoPublish=false: tras este workflow hay
+# que entrar en https://central.sonatype.com/publishing/deployments y pulsar
+# "Publish" una vez la validacion termine en OK.
+
 on:
   release:
     types: [created]
@@ -15,7 +28,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v7
 
@@ -24,10 +36,16 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
-          server-id: github
           settings-path: ${{ github.workspace }}
+          server-id: central
+          server-username-env-var: CENTRAL_USERNAME
+          server-password-env-var: CENTRAL_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase-env-var: GPG_PASSPHRASE
 
-      - name: Publish to GitHub Packages
-        run: mvn -B deploy -s $GITHUB_WORKSPACE/settings.xml
+      - name: Publish to Maven Central
+        run: mvn -B -P release deploy -s $GITHUB_WORKSPACE/settings.xml
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}

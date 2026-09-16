@@ -30,33 +30,23 @@ cd verifactu-sdk
 mvn clean install
 ```
 
-### Opción 2: Desde GitHub Packages (Recomendado)
+### Opción 2: Desde Maven Central (Recomendado)
 
-Añade el repositorio a tu `pom.xml` o `settings.xml`:
-
-```xml
-<repositories>
-    <repository>
-        <id>github</id>
-        <url>https://maven.pkg.github.com/squareetlabs/verifactu-sdk</url>
-        <snapshots>
-            <enabled>true</enabled>
-        </snapshots>
-    </repository>
-</repositories>
-```
-
-Y la dependencia:
+El paquete está publicado en Maven Central, por lo que no se necesita configurar ningún repositorio adicional ni credenciales:
 
 ```xml
 <dependency>
     <groupId>com.squareetlabs</groupId>
-    <artifactId>verifactu-sdk</artifactId>
+    <artifactId>verifactu</artifactId>
     <version>1.1.0</version>
 </dependency>
 ```
 
-**Nota**: Necesitarás configurar tus credenciales de GitHub (token) en tu `settings.xml` para acceder al paquete.
+Si usas Gradle:
+
+```groovy
+implementation 'com.squareetlabs:verifactu:1.1.0'
+```
 
 ## Configuración
 
