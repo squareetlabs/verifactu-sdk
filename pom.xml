@@ -4,7 +4,7 @@
   <groupId>com.squareetlabs</groupId>
   <artifactId>verifactu</artifactId>
   <packaging>jar</packaging>
-  <version>1.1.0</version>
+  <version>1.2.0</version>
   <name>verifactu</name>
   <description>Java package for VeriFactu electronic invoicing management (AEAT)</description>
   <url>https://github.com/squareetlabs/verifactu-sdk</url>

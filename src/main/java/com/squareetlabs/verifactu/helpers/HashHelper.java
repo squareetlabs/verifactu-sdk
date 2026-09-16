@@ -20,6 +20,13 @@ public class HashHelper {
             "previous_hash",
             "generated_at"));
 
+    private static final Set<String> ANNULMENT_REQUIRED_FIELDS = new HashSet<>(Arrays.asList(
+            "issuer_tax_id",
+            "invoice_number",
+            "issue_date",
+            "previous_hash",
+            "generated_at"));
+
     /**
      * Generates the hash for an invoice record according to AEAT specifications.
      *
@@ -60,6 +67,48 @@ public class HashHelper {
         inputString.append(field("TipoFactura", tipoFactura, true));
         inputString.append(field("CuotaTotal", cuotaTotal, true));
         inputString.append(field("ImporteTotal", importeTotal, true));
+        inputString.append(field("Huella", huellaAnterior, true));
+        inputString.append(field("FechaHoraHusoGenRegistro", fechaHora, false));
+
+        return sha256(inputString.toString()).toUpperCase();
+    }
+
+    /**
+     * Generates the hash for an annulment ("anulación") record according to
+     * AEAT specifications ("Detalle de las especificaciones técnicas para la
+     * generación de la huella o hash de los registros de facturación",
+     * apartado b: registros de facturación de anulación).
+     *
+     * @param data Annulment record data with snake_case keys (for compatibility).
+     * @return Map containing 'hash' and 'inputString'
+     * @throws IllegalArgumentException if required fields are missing or unexpected
+     *                                  fields are present
+     */
+    public static Map<String, String> generateAnnulmentHash(Map<String, String> data) {
+        validateData(ANNULMENT_REQUIRED_FIELDS, data.keySet());
+
+        StringBuilder inputString = new StringBuilder();
+        inputString.append(field("IDEmisorFacturaAnulada", data.get("issuer_tax_id"), true));
+        inputString.append(field("NumSerieFacturaAnulada", data.get("invoice_number"), true));
+        inputString.append(field("FechaExpedicionFacturaAnulada", data.get("issue_date"), true));
+        inputString.append(field("Huella", data.get("previous_hash"), true));
+        inputString.append(field("FechaHoraHusoGenRegistro", data.get("generated_at"), false));
+
+        String hash = sha256(inputString.toString()).toUpperCase();
+
+        Map<String, String> result = new HashMap<>();
+        result.put("hash", hash);
+        result.put("inputString", inputString.toString());
+        return result;
+    }
+
+    public static String generateAnnulmentHash(
+            String issuerVat, String numSerie, String fechaExp, String huellaAnterior, String fechaHora) {
+
+        StringBuilder inputString = new StringBuilder();
+        inputString.append(field("IDEmisorFacturaAnulada", issuerVat, true));
+        inputString.append(field("NumSerieFacturaAnulada", numSerie, true));
+        inputString.append(field("FechaExpedicionFacturaAnulada", fechaExp, true));
         inputString.append(field("Huella", huellaAnterior, true));
         inputString.append(field("FechaHoraHusoGenRegistro", fechaHora, false));
 

@@ -16,6 +16,7 @@ Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu 
 - **Modos duales**: VERI\*FACTU y NO VERI\*FACTU (Requerimiento)
 - **Generación de URL/QR** de validación según especificaciones AEAT
 - **Encadenamiento** entre registros, facturas rectificativas y asientos resumen
+- **Anulación** de registros de facturación ya remitidos (`AeatClient#sendAnnulment`, `RegistroFacturacionAnulacionType`)
 - **Representación de terceros**: los tres mecanismos contemplados por VeriFactu (envío por representante, emisión por tercero, sistemas multi-obligado)
 - Publicado en **Maven Central**
 
@@ -27,14 +28,14 @@ Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu 
 <dependency>
     <groupId>com.squareetlabs</groupId>
     <artifactId>verifactu</artifactId>
-    <version>1.1.0</version>
+    <version>1.2.0</version>
 </dependency>
 ```
 
 Con Gradle:
 
 ```groovy
-implementation 'com.squareetlabs:verifactu:1.1.0'
+implementation 'com.squareetlabs:verifactu:1.2.0'
 ```
 
 ### Opción 2: Desde el repositorio local
@@ -136,6 +137,34 @@ if ("success".equals(response.get("status"))) {
 
 Ejemplos de construcción de cada tipo (incluyendo rectificativas por sustitución y por diferencia, y facturas con destinatario extranjero): [`InvoiceTypesExample.java`](src/test/java/com/squareetlabs/verifactu/examples/InvoiceTypesExample.java). Detalle completo en la Wiki: **[Tipos de factura](https://github.com/squareetlabs/verifactu-sdk/wiki/Tipos-de-Factura)**.
 
+## Anulación de un registro de facturación
+
+Una **anulación** (`AeatClient.sendAnnulment`) NO borra ni modifica la factura original: es un registro nuevo, encadenado con el anterior, que le indica a la AEAT que un registro de "alta" previo debe considerarse anulado. Úsala cuando una factura ya remitida debe quedar sin efecto (enviada por error, con datos incorrectos, o que nunca llegó a registrarse en la AEAT).
+
+> ⚠️ Si lo que necesitas es **corregir el importe/base** de una factura ya emitida, NO uses una anulación: emite una **factura rectificativa** (`InvoiceType.R1`-`R5`) con `AeatClient.sendInvoice`, ver [Tipos de factura](#tipos-de-factura-soportados).
+
+```java
+import com.squareetlabs.verifactu.models.Annulment;
+import java.time.LocalDate;
+
+Annulment annulment = new Annulment("F2026-001", LocalDate.of(2026, 1, 15));
+
+// Se encadena igual que una factura de alta: pasa la respuesta del registro
+// inmediatamente anterior de la cadena (factura o anulación), o null si es
+// el primer registro.
+Map<String, Object> response = client.sendAnnulment(annulment, previousResponse);
+```
+
+Casos especiales contemplados por la AEAT, disponibles vía setters de `Annulment`:
+
+| Método | Cuándo usarlo |
+|---|---|
+| `setNotRegisteredAtAeat(true)` | La factura a anular NUNCA llegó a registrarse en la AEAT (p. ej. fue rechazada por errores no admisibles) |
+| `setRetryAfterRejection(true)` | Se corrige una anulación previa para la MISMA factura que la AEAT rechazó |
+| `setGeneratedBy("T"/"D")` + `setGeneratorName/TaxId` | La anulación la generó un tercero o el propio destinatario, no el obligado |
+
+Ejemplo completo: [`AnnulmentExample.java`](src/test/java/com/squareetlabs/verifactu/examples/AnnulmentExample.java)
+
 ## Representación de terceros
 
 VeriFactu contempla **tres mecanismos** de representación, opcionales e independientes entre sí:
@@ -209,8 +238,8 @@ mvn test
 ```
 src/
 ├── main/java/com/squareetlabs/verifactu/
-│   ├── contracts/    # Interfaces (VeriFactuInvoice, VeriFactuBreakdown, VeriFactuRecipient)
-│   ├── models/       # Modelos POJO (Invoice, Breakdown, Recipient) y enums (InvoiceType, RegimeType, OperationType)
+│   ├── contracts/    # Interfaces (VeriFactuInvoice, VeriFactuBreakdown, VeriFactuRecipient, VeriFactuAnnulment)
+│   ├── models/       # Modelos POJO (Invoice, Breakdown, Recipient, Annulment) y enums (InvoiceType, RegimeType, OperationType)
 │   ├── services/     # AeatClient, SignatureService, VeriFactuConfig
 │   ├── helpers/      # HashHelper, XmlHelper, NifValidator, InvoiceValidator
 │   └── aeat/         # Clases JAXB generadas automáticamente desde el WSDL/XSD de la AEAT (no editar a mano)
