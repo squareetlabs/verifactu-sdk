@@ -2,37 +2,26 @@
 
 Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu según las especificaciones de la Agencia Tributaria (AEAT).
 
+> 📖 **Documentación completa**: esta guía cubre lo esencial para empezar. Para el detalle de cada caso de uso (tipos de factura, rectificativas, representación de terceros, multi-tenant, validación, QR, firma digital, solución de problemas...) consulta la **[Wiki del proyecto](https://github.com/squareetlabs/verifactu-sdk/wiki)**.
+>
+> 💻 Todos los ejemplos de esta guía y de la Wiki tienen su equivalente **compilable y verificado** en [`src/test/java/com/squareetlabs/verifactu/examples/`](src/test/java/com/squareetlabs/verifactu/examples/) — se compilan en cada build (`mvn test-compile`), por lo que nunca quedan desincronizados del código real.
+
 ## Características principales
 
-- **Modelos POJO** para invoices, breakdowns y recipients
-- **Enums** para campos fiscales (invoice type, tax type, regime, operation type, etc.)
-- **Helpers** para operaciones de hash, XML, validación de NIF/CIF y generación de QR
-- **Servicio AEAT client** configurable con Apache CXF
-- **Firma digital XAdES** con EU DSS 5.11.x
-- **Validación automática** de facturas (NIF/CIF, consistencia de importes, campos obligatorios)
-- **Modos duales**: VERIFACTU y NO VERIFACTU (Requerimiento)
-- **Generación de QR**: URLs automáticas para códigos QR según modo y entorno
-- **Campos avanzados**: Encadenamiento blockchain, facturas rectificativas, subsanación
-- **Multi-tenant**: Soporte para múltiples instalaciones bajo el mismo NIF
-- **Clientes extranjeros**: Soporte para identificadores internacionales
-- **Tests unitarios** para todos los componentes core
-- Listo para extensión y uso en producción
+- **Modelos POJO** para facturas, desgloses y destinatarios
+- **Enums** para los códigos AEAT (tipo de factura, régimen, calificación de la operación)
+- **Cliente AEAT** configurable con Apache CXF (SOAP)
+- **Firma digital XAdES** con EU DSS
+- **Validación local** de facturas (NIF/CIF, consistencia de importes, campos obligatorios)
+- **Modos duales**: VERI\*FACTU y NO VERI\*FACTU (Requerimiento)
+- **Generación de URL/QR** de validación según especificaciones AEAT
+- **Encadenamiento** entre registros, facturas rectificativas y asientos resumen
+- **Representación de terceros**: los tres mecanismos contemplados por VeriFactu (envío por representante, emisión por tercero, sistemas multi-obligado)
+- Publicado en **Maven Central**
 
 ## Instalación
 
-### Opción 1: Desde el repositorio local
-
-Clona el repositorio y construye el paquete:
-
-```bash
-git clone https://github.com/squareetlabs/verifactu-sdk.git
-cd verifactu-sdk
-mvn clean install
-```
-
-### Opción 2: Desde Maven Central (Recomendado)
-
-El paquete está publicado en Maven Central, por lo que no se necesita configurar ningún repositorio adicional ni credenciales:
+### Opción 1: Desde Maven Central (recomendado)
 
 ```xml
 <dependency>
@@ -42,510 +31,201 @@ El paquete está publicado en Maven Central, por lo que no se necesita configura
 </dependency>
 ```
 
-Si usas Gradle:
+Con Gradle:
 
 ```groovy
 implementation 'com.squareetlabs:verifactu:1.1.0'
 ```
 
+### Opción 2: Desde el repositorio local
+
+```bash
+git clone https://github.com/squareetlabs/verifactu-sdk.git
+cd verifactu-sdk
+mvn clean install
+```
+
 ## Configuración
 
-### Variables de configuración
-
-Crea una instancia de `VeriFactuConfig` con los parámetros de tu empresa:
+Crea una instancia de `VeriFactuConfig` con los datos del **emisor** (el "obligado tributario"). Estos datos —no los del objeto `Invoice`— son los que se envían a la AEAT en `Cabecera.ObligadoEmision` y en `SistemaInformatico`:
 
 ```java
 VeriFactuConfig config = new VeriFactuConfig(
-    "Mi Empresa S.L.",           // Nombre del emisor
-    "B12345678"                  // NIF/CIF del emisor
+    "Mi Empresa S.L.",   // Nombre/razón social del emisor
+    "B12345678"          // NIF/CIF del emisor
 );
 
-// Configuración adicional opcional
-config.setSystemId("01");                           // ID del sistema informático
-config.setDefaultCurrency("EUR");                   // Moneda por defecto
-config.setVeriFactuMode(true);                      // Modo VERIFACTU (true) o NO VERIFACTU (false)
-config.setTipoUsoPosibleSoloVerifactu("N");        // Tipo de uso posible solo VeriFactu
-config.setTipoUsoPosibleMultiOt("S");              // Tipo de uso posible multi-OT
-config.setIndicadorMultiplesOt("N");               // Indicador múltiples OT
+// Datos del sistema informático (SistemaInformatico), opcionales
+config.setSystemName("MiSistemaFacturacion");
+config.setSystemId("01");
+config.setSystemVersion("1.0");
+config.setInstallationNumber("001");
 ```
 
-### Modos de facturación
-
-- **VERIFACTU mode (true)**: Genera hash de encadenamiento y cumple con todos los requisitos VeriFactu
-- **NO VERIFACTU mode (false)**: Modo de requerimiento sin encadenamiento blockchain
-
-### Inicializar el cliente AEAT
+### Cliente AEAT
 
 ```java
 AeatClient client = new AeatClient(
-    "/path/to/certificate.p12",  // Ruta al certificado digital
-    "certificatePassword",        // Contraseña del certificado
-    config,                       // Configuración VeriFactu
-    false,                        // false = pre-producción, true = producción
-    true                          // true = modo VERIFACTU, false = NO VERIFACTU
+    "/ruta/al/certificado.p12",  // Certificado digital del emisor (o del representante, ver la Wiki)
+    "contraseñaDelCertificado",
+    config,
+    false,  // false = preproducción, true = producción
+    true    // true = modo VERI*FACTU, false = modo NO VERI*FACTU (requerimiento)
 );
 ```
 
-## Uso rápido
-
-### Crear una factura (Ejemplo básico)
+## Uso rápido: crear y enviar una factura
 
 ```java
 import com.squareetlabs.verifactu.models.*;
 import com.squareetlabs.verifactu.services.*;
 import java.time.LocalDate;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.Map;
 
-public class InvoiceExample {
-    public static void main(String[] args) {
-        // Configurar cliente
-        VeriFactuConfig config = new VeriFactuConfig("Mi Empresa S.L.", "B12345678");
-        AeatClient client = new AeatClient("/path/to/cert.p12", "password", config, false, true);
-        
-        // Crear factura
-        Invoice invoice = new Invoice();
-        invoice.setInvoiceNumber("F2024-001");
-        invoice.setIssueDate(LocalDate.now());
-        invoice.setInvoiceType(InvoiceType.STANDARD);
-        invoice.setOperationType(OperationType.STANDARD);
-        invoice.setTotalAmount(121.00);
-        invoice.setTaxAmount(21.00);
-        invoice.setIssuerTaxId("B12345678");
-        
-        // Añadir desglose (breakdown)
-        Breakdown breakdown = new Breakdown(
-            TaxType.IVA,              // Tipo de impuesto
-            RegimeType.GENERAL,       // Régimen fiscal
-            21.0,                     // Tipo impositivo
-            100.0,                    // Base imponible
-            21.0                      // Cuota
-        );
-        invoice.setBreakdowns(Arrays.asList(breakdown));
-        
-        // Añadir destinatario (opcional)
-        Recipient recipient = new Recipient();
-        recipient.setName("Cliente S.L.");
-        recipient.setTaxId("B87654321");
-        recipient.setCountry("ES");
-        invoice.setRecipients(Arrays.asList(recipient));
-        
-        // Enviar factura a AEAT
-        Map<String, Object> response = client.sendInvoice(invoice, null);
-        
-        System.out.println("Estado: " + response.get("status"));
-        System.out.println("Hash generado: " + response.get("hash"));
-        System.out.println("QR URL: " + response.get("qrUrl"));
-    }
-}
-```
+VeriFactuConfig config = new VeriFactuConfig("Mi Empresa S.L.", "B12345678");
+AeatClient client = new AeatClient("/ruta/certificado.p12", "password", config, false, true);
 
-## Tipos de factura disponibles
-
-El paquete soporta todos los tipos de factura según la normativa AEAT:
-
-- `InvoiceType.STANDARD` - Factura estándar (F1)
-- `InvoiceType.SIMPLIFIED` - Factura simplificada (F2)
-- `InvoiceType.SUBSTITUTE` - Factura sin identificación del destinatario (F3)
-- `InvoiceType.EXPORT` - Asiento resumen de facturas (F4)
-- `InvoiceType.RECTIFICATIVE_R1` - Factura rectificativa (Error fundado en derecho)
-- `InvoiceType.RECTIFICATIVE_R2` - Factura rectificativa (Art. 80.1, 80.2, 80.6 LIVA)
-- `InvoiceType.RECTIFICATIVE_R3` - Factura rectificativa (Art. 80.3, 80.4 LIVA)
-- `InvoiceType.RECTIFICATIVE_R4` - Factura rectificativa (Resto)
-- `InvoiceType.RECTIFICATIVE_R5` - Factura rectificativa en facturas simplificadas
-
-## Ejemplos de tipos de factura
-
-### Factura estándar
-
-```java
 Invoice invoice = new Invoice();
-invoice.setInvoiceNumber("F2024-001");
+invoice.setInvoiceNumber("F2026-001");
 invoice.setIssueDate(LocalDate.now());
-invoice.setInvoiceType(InvoiceType.STANDARD);
-invoice.setOperationType(OperationType.STANDARD);
-invoice.setTotalAmount(121.00);
+invoice.setInvoiceType(InvoiceType.F1);   // Factura estándar
+invoice.setTotalAmount(121.00);           // Base + cuota
 invoice.setTaxAmount(21.00);
-invoice.setIssuerTaxId("B12345678");
 
-Breakdown breakdown = new Breakdown(TaxType.IVA, RegimeType.GENERAL, 21.0, 100.0, 21.0);
-invoice.setBreakdowns(Arrays.asList(breakdown));
-```
+// El constructor de Breakdown recibe los CÓDIGOS AEAT como String (no enums):
+// claveRegimen ("01" = general, ver RegimeType), calificacionOperacion
+// ("S1" = sujeta y no exenta, ver OperationType), tipo, base, cuota.
+Breakdown breakdown = new Breakdown(
+    RegimeType.GENERAL.getCode(),   // "01"
+    OperationType.S1.getCode(),     // "S1"
+    21.0,                            // Tipo impositivo (%)
+    100.00,                          // Base imponible
+    21.00                            // Cuota repercutida
+);
+invoice.setBreakdowns(Collections.singletonList(breakdown));
 
-### Factura simplificada
-
-```java
-Invoice invoice = new Invoice();
-invoice.setInvoiceNumber("FS2024-001");
-invoice.setIssueDate(LocalDate.now());
-invoice.setInvoiceType(InvoiceType.SIMPLIFIED);
-invoice.setOperationType(OperationType.STANDARD);
-invoice.setTotalAmount(121.00);
-invoice.setTaxAmount(21.00);
-invoice.setIssuerTaxId("B12345678");
-invoice.setSimplified(true);  // Marca como simplificada
-
-Breakdown breakdown = new Breakdown(TaxType.IVA, RegimeType.GENERAL, 21.0, 100.0, 21.0);
-invoice.setBreakdowns(Arrays.asList(breakdown));
-```
-
-### Factura rectificativa por sustitución con ImporteRectificacion
-
-```java
-Invoice invoice = new Invoice();
-invoice.setInvoiceNumber("FR2024-001");
-invoice.setIssueDate(LocalDate.now());
-invoice.setInvoiceType(InvoiceType.RECTIFICATIVE_R1);
-invoice.setOperationType(OperationType.STANDARD);
-invoice.setCorrectionType("S");  // Sustitución
-invoice.setIssuerTaxId("B12345678");
-
-// Importes NUEVOS de la factura rectificativa
-invoice.setTotalAmount(150.00);
-invoice.setTaxAmount(31.50);
-
-// Importes ORIGINALES de la factura que se corrige (ImporteRectificacion)
-invoice.setCorrectedBaseAmount(100.00);   // Base original
-invoice.setCorrectedTaxAmount(21.00);     // IVA original
-invoice.setCorrectedSurchargeAmount(5.20); // Recargo original (opcional)
-
-// Referencia a la factura original
-invoice.setOriginalInvoiceNumber("F2024-001");
-invoice.setOriginalIssueDate(LocalDate.of(2024, 1, 15));
-
-Breakdown breakdown = new Breakdown(TaxType.IVA, RegimeType.GENERAL, 21.0, 150.0, 31.50);
-invoice.setBreakdowns(Arrays.asList(breakdown));
-```
-
-### Factura rectificativa (R1) - Por diferencia
-
-```java
-Invoice invoice = new Invoice();
-invoice.setInvoiceNumber("FR2024-001");
-invoice.setIssueDate(LocalDate.now());
-invoice.setInvoiceType(InvoiceType.RECTIFICATIVE_R1);
-invoice.setOperationType(OperationType.STANDARD);
-invoice.setTotalAmount(121.00);
-invoice.setTaxAmount(21.00);
-invoice.setIssuerTaxId("B12345678");
-
-// Referencia a la factura original
-invoice.setOriginalInvoiceNumber("F2024-001");
-invoice.setOriginalIssueDate(LocalDate.of(2024, 1, 15));
-
-Breakdown breakdown = new Breakdown(TaxType.IVA, RegimeType.GENERAL, 21.0, 100.0, 21.0);
-invoice.setBreakdowns(Arrays.asList(breakdown));
-```
-
-### Factura de exportación (F4)
-
-```java
-Invoice invoice = new Invoice();
-invoice.setInvoiceNumber("FE2024-001");
-invoice.setIssueDate(LocalDate.now());
-invoice.setInvoiceType(InvoiceType.EXPORT);
-invoice.setOperationType(OperationType.EXPORT);
-invoice.setTotalAmount(1000.00);
-invoice.setTaxAmount(0.0);
-invoice.setIssuerTaxId("B12345678");
-
-Recipient recipient = new Recipient();
-recipient.setName("Foreign Client Ltd.");
-recipient.setTaxId("FR123456789");
-recipient.setCountry("FR");
-invoice.setRecipients(Arrays.asList(recipient));
-
-Breakdown breakdown = new Breakdown(TaxType.IVA, RegimeType.EXPORT, 0.0, 1000.0, 0.0);
-invoice.setBreakdowns(Arrays.asList(breakdown));
-```
-
-### Factura con encadenamiento blockchain
-
-```java
-Invoice invoice = new Invoice();
-invoice.setInvoiceNumber("F2024-002");
-invoice.setIssueDate(LocalDate.now());
-invoice.setInvoiceType(InvoiceType.STANDARD);
-invoice.setOperationType(OperationType.STANDARD);
-invoice.setTotalAmount(242.00);
-invoice.setTaxAmount(42.00);
-invoice.setIssuerTaxId("B12345678");
-
-// Encadenamiento con factura anterior
-invoice.setPreviousInvoiceNumber("F2024-001");
-invoice.setPreviousHash("ABC123DEF456...");  // Hash de la factura anterior
-
-Breakdown breakdown = new Breakdown(TaxType.IVA, RegimeType.GENERAL, 21.0, 200.0, 42.0);
-invoice.setBreakdowns(Arrays.asList(breakdown));
-```
-
-## Campos avanzados del modelo Invoice
-
-### Campos de encadenamiento blockchain
-
-- `previousInvoiceNumber`: Número de la factura anterior en la cadena
-- `previousHash`: Hash de la factura anterior
-- `previousIssueDate`: Fecha de emisión de la factura anterior
-
-### Campos de facturas rectificativas
-
-- `originalInvoiceNumber`: Número de la factura original a rectificar
-- `originalIssueDate`: Fecha de emisión de la factura original
-- `rectificationType`: Tipo de rectificación (R1-R5)
-- `correctionType`: Tipo de corrección ("S" = Sustitución, "I" = Por diferencia)
-- `correctedBaseAmount`: Base imponible original (requerido para tipo "S")
-- `correctedTaxAmount`: Cuota de IVA original (requerido para tipo "S")
-- `correctedSurchargeAmount`: Cuota de recargo original (opcional)
-
-### Campos de subsanación
-
-- `subsanationInvoiceNumber`: Número de factura de subsanación
-- `subsanationDate`: Fecha de subsanación
-- `rejectionCode`: Código de rechazo AEAT
-
-### Campos de representación de terceros (VeriFactuConfig / Invoice)
-
-Ver la sección [Facturación en representación de terceros](#facturación-en-representación-de-terceros) más abajo.
-
-- `VeriFactuConfig.representativeName` / `representativeVat`: identidad del representante que remite el fichero a la AEAT en nombre del obligado (`Cabecera.Representante`)
-- `Invoice.issuedByThirdPartyOrRecipient`: `"T"` (tercero) o `"D"` (autofactura por el destinatario); `null` cuando el propio obligado emite la factura (`RegistroFacturacionAltaType.EmitidaPorTerceroODestinatario`)
-- `Invoice.thirdPartyName` / `thirdPartyTaxId`: identidad del tercero que expide la factura, requerido cuando `issuedByThirdPartyOrRecipient = "T"` (`RegistroFacturacionAltaType.Tercero`)
-- `Invoice.multipleObligatedIndicator`: override por factura de `SistemaInformatico.IndicadorMultiplesOT`, para plataformas SaaS multi-cliente donde este valor difiere por cliente/tenant
-
-### Campos de estado de respuesta AEAT
-
-- `aeatStatus`: Estado de la respuesta AEAT (ACCEPTED, REJECTED, PENDING)
-- `aeatResponseCode`: Código de respuesta AEAT
-- `aeatResponseMessage`: Mensaje de respuesta AEAT
-- `aeatRegistrationDate`: Fecha de registro en AEAT
-
-### Campos adicionales
-
-- `description`: Descripción de la factura
-- `simplified`: Indica si es factura simplificada
-
-## Facturación en representación de terceros
-
-VeriFactu contempla **tres mecanismos distintos** de "representación", todos opcionales e independientes entre sí. Ninguno se activa a menos que lo configures explícitamente.
-
-> ⚠️ Rellenar `Representante` sin tener la autorización legal correspondiente
-> (apoderamiento inscrito en el registro de apoderamientos, o Convenio de
-> colaboración social Tipo 017 con los modelos normalizados firmados según la
-> Resolución de la AEAT de 18-dic-2024) es un incumplimiento. Consulta con tu
-> asesoría fiscal antes de activarlo en producción.
-
-### 1. Quién remite el fichero a la AEAT (`Cabecera.Representante`)
-
-Cuando tu plataforma (p. ej. una empresa de software o gestoría) envía los registros de facturación a la AEAT en nombre de tus clientes, en lugar de que cada cliente lo haga con su propio certificado:
-
-```java
-VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678"); // el obligado tributario
-config.setRepresentativeName("Odei Software S.L.");   // quien remite el fichero
-config.setRepresentativeVat("B87654321");
-
-// El certPath/certPassword del AeatClient debe ser el certificado cualificado
-// del REPRESENTANTE (Odei), no el del cliente, ya que es quien se autentica
-// frente a la Sede Electrónica de la AEAT.
-AeatClient client = new AeatClient("/path/to/odei-cert.p12", "password", config, false, true);
-```
-
-### 2. Quién emite la factura (`Tercero` / `EmitidaPorTerceroODestinatario`)
-
-Cuando la factura la expide materialmente un tercero en nombre del obligado (no solo el envío del fichero, sino la propia emisión de la factura):
-
-```java
-Invoice invoice = new Invoice();
-invoice.setIssuerTaxId("B12345678"); // el obligado a expedir factura (el cliente)
-// ...
-
-invoice.setIssuedByThirdPartyOrRecipient("T"); // "T" = Tercero, "D" = autofactura por el destinatario
-invoice.setThirdPartyName("Odei Software S.L.");
-invoice.setThirdPartyTaxId("B87654321");
-```
-
-Deja `issuedByThirdPartyOrRecipient` sin establecer (`null`, valor por defecto) en el caso habitual en que el propio obligado emite su factura.
-
-### 3. Sistema multi-cliente / SaaS (`IndicadorMultiplesOT`)
-
-`SistemaInformatico.IndicadorMultiplesOT` **debe calcularse automáticamente por cliente en cada envío** (nunca fijarse a mano por el usuario). Si tu backend gestiona la facturación de varios obligados tributarios distintos (o de un mismo obligado con varias "facturaciones" independientes), calcula tú mismo el valor para ese cliente concreto y pásalo por factura:
-
-```java
-// Además, declara la capacidad estructural del sistema una sola vez:
-config.setMultiObligatedCapable("S"); // el SIF puede llevar la facturación de varios OT
-
-// Y, por cada factura, informa el indicador dinámico según ESE cliente:
-boolean esteClienteTieneMasDeUnaFacturacionEnElSaaS = /* tu lógica de negocio */ true;
-invoice.setMultipleObligatedIndicator(esteClienteTieneMasDeUnaFacturacionEnElSaaS);
-```
-
-Si no se informa `multipleObligatedIndicator` en la factura, el SDK usa como respaldo `VeriFactuConfig.getHasMultipleObligated()` (pensado para integraciones de un solo cliente).
-
-## Envío de factura a AEAT
-
-```java
-// Enviar factura
+// Segundo parámetro: registro anterior de la cadena (null = primer registro).
+// Ver la Wiki -> "Encadenamiento" para cómo enlazar varias facturas.
 Map<String, Object> response = client.sendInvoice(invoice, null);
 
-// Verificar respuesta
-if ("ACCEPTED".equals(response.get("status"))) {
-    System.out.println("Factura aceptada");
-    System.out.println("Hash: " + response.get("hash"));
+if ("success".equals(response.get("status"))) {
     System.out.println("CSV: " + response.get("csv"));
-    System.out.println("QR URL: " + response.get("qrUrl"));
+    System.out.println("Huella (hash): " + response.get("hash"));
+    System.out.println("Estado AEAT: " + response.get("aeat_status"));
 } else {
-    System.out.println("Factura rechazada: " + response.get("message"));
+    System.out.println("Error: " + response.get("message"));
 }
 ```
 
-### Consultar estado de facturas enviadas
+> Ejemplo completo y compilable: [`BasicInvoiceExample.java`](src/test/java/com/squareetlabs/verifactu/examples/BasicInvoiceExample.java)
 
-```java
-// Implementar consulta de estado según necesidades
-// El cliente AEAT proporciona métodos para verificar el estado
-```
+## Tipos de factura soportados
 
-## Validación automática de facturas
+| Enum | Código AEAT | Descripción |
+|---|---|---|
+| `InvoiceType.F1` | F1 | Factura estándar |
+| `InvoiceType.F2` | F2 | Factura simplificada |
+| `InvoiceType.F3` | F3 | Factura emitida en sustitución de facturas simplificadas |
+| `InvoiceType.F4` | F4 | Asiento resumen de facturas |
+| `InvoiceType.R1` | R1 | Rectificativa (art. 80.1, 80.2, 80.6 LIVA) |
+| `InvoiceType.R2` | R2 | Rectificativa (art. 80.3 LIVA) |
+| `InvoiceType.R3` | R3 | Rectificativa (art. 80.4 LIVA) |
+| `InvoiceType.R4` | R4 | Rectificativa (resto de causas) |
+| `InvoiceType.R5` | R5 | Rectificativa de facturas simplificadas |
 
-El paquete incluye validación automática mediante `InvoiceValidator`:
+Ejemplos de construcción de cada tipo (incluyendo rectificativas por sustitución y por diferencia, y facturas con destinatario extranjero): [`InvoiceTypesExample.java`](src/test/java/com/squareetlabs/verifactu/examples/InvoiceTypesExample.java). Detalle completo en la Wiki: **[Tipos de factura](https://github.com/squareetlabs/verifactu-sdk/wiki/Tipos-de-Factura)**.
+
+## Representación de terceros
+
+VeriFactu contempla **tres mecanismos** de representación, opcionales e independientes entre sí:
+
+1. **Quién remite el fichero a la AEAT** (`Cabecera.Representante`, vía `VeriFactuConfig.setRepresentativeName/Vat`)
+2. **Quién emite materialmente la factura** (`Invoice.setIssuedByThirdPartyOrRecipient/setThirdParty*`)
+3. **Sistemas multi-cliente / SaaS** (`Invoice.setMultipleObligatedIndicator`, calculado por factura, nunca fijo)
+
+> ⚠️ Rellenar `Representante` sin la autorización legal correspondiente (apoderamiento inscrito o Convenio de colaboración social Tipo 017) es un incumplimiento. Consulta con tu asesoría fiscal antes de activarlo en producción.
+
+Ejemplos: [`ThirdPartyRepresentationExample.java`](src/test/java/com/squareetlabs/verifactu/examples/ThirdPartyRepresentationExample.java). Detalle completo: **[Representación de terceros](https://github.com/squareetlabs/verifactu-sdk/wiki/Representacion-de-Terceros)**.
+
+## Validación local de facturas
 
 ```java
 import com.squareetlabs.verifactu.helpers.InvoiceValidator;
 
-InvoiceValidator validator = new InvoiceValidator();
-List<String> errors = validator.validate(invoice);
+// Metodo ESTATICO: no se instancia InvoiceValidator.
+InvoiceValidator.ValidationResult result = InvoiceValidator.validate(invoice);
 
-if (errors.isEmpty()) {
+if (result.isValid()) {
     System.out.println("Factura válida");
 } else {
-    System.out.println("Errores de validación:");
-    errors.forEach(System.out::println);
+    System.out.println(result.getErrorMessage());
 }
 ```
 
-### Validaciones incluidas:
+Valida: NIF/CIF (formato y dígito de control), coherencia base+cuota=total, campos obligatorios, y que las facturas rectificativas referencien correctamente la original.
 
-- **NIF/CIF**: Validación de formato y dígito de control
-- **Consistencia de importes**: Base imponible + IVA = Total
-- **Campos obligatorios**: Número, fecha, tipo, importes
-- **Desgloses**: Al menos un breakdown por factura
-- **Facturas rectificativas**: Referencia a factura original obligatoria
-
-## Uso de Helpers
-
-### Generación de hash (Huella)
-
-```java
-import com.squareetlabs.verifactu.helpers.HashHelper;
-
-String hash = HashHelper.generateHash(
-    "B12345678",           // NIF emisor
-    "F2024-001",          // Número factura
-    "2024-01-27",         // Fecha emisión
-    "121.00",             // Importe total
-    "ABC123..."           // Hash anterior (opcional)
-);
-```
-
-### Validación de NIF/CIF
+### Validación de NIF/CIF/NIE
 
 ```java
 import com.squareetlabs.verifactu.helpers.NifValidator;
 
-boolean isValid = NifValidator.validate("B12345678");
-String nifType = NifValidator.getType("B12345678");  // CIF, NIF, NIE, etc.
+boolean isValid = NifValidator.isValid("B12345678");
+String idType = NifValidator.getIdType("B12345678"); // "NIF", "NIE", "CIF" o "UNKNOWN"
 ```
 
-### Generación de URL para códigos QR
+Ejemplo completo: [`ValidationExample.java`](src/test/java/com/squareetlabs/verifactu/examples/ValidationExample.java)
+
+## Generación de QR de validación
+
+No existe una clase `QrHelper` independiente: los métodos viven directamente en `Invoice`.
 
 ```java
-import com.squareetlabs.verifactu.helpers.QrHelper;
-
-String qrUrl = QrHelper.generateQrUrl(
-    "B12345678",
-    "F2024-001",
-    "2024-01-27",
-    "121.00",
-    "ABC123...",
-    true,  // Modo VERIFACTU
-    false  // Pre-producción
-);
-
-// Generar imagen QR
-byte[] qrImage = QrHelper.generateQrImage(qrUrl, 300, 300);
+String url = invoice.getValidationUrl(false);       // false = pruebas, true = producción
+byte[] qrPng = invoice.getValidationQR(false, 300);  // PNG de 300x300 px
 ```
+
+Ejemplo completo: [`QrCodeExample.java`](src/test/java/com/squareetlabs/verifactu/examples/QrCodeExample.java)
 
 ## Firma digital XAdES
 
 ```java
 import com.squareetlabs.verifactu.services.SignatureService;
 
-SignatureService signatureService = new SignatureService(
-    "/path/to/cert.p12",
-    "password"
-);
-
-// Firmar XML
-byte[] xmlBytes = xmlString.getBytes();
+SignatureService signatureService = new SignatureService("/ruta/certificado.p12", "password");
 byte[] signedXml = signatureService.signXml(xmlBytes);
-
-// Verificar firma
-boolean isValid = signatureService.verifySignature(signedXml);
 ```
 
-## Testing
+Ejemplo completo: [`SignatureExample.java`](src/test/java/com/squareetlabs/verifactu/examples/SignatureExample.java)
 
-Ejecuta todos los tests unitarios:
+## Testing
 
 ```bash
 mvn test
 ```
-
-### Tests incluidos:
-
-- `InvoiceValidatorTest`: Validación de facturas
-- `NifValidatorTest`: Validación de NIF/CIF
-- `HashHelperTest`: Generación de hashes
-- `VeriFactuComplianceTest`: Cumplimiento con especificaciones AEAT
-- `AeatClientTest`: Funcionalidad del cliente AEAT
 
 ## Estructura del proyecto
 
 ```
 src/
 ├── main/java/com/squareetlabs/verifactu/
-│   ├── contracts/          # Interfaces
-│   │   ├── VeriFactuInvoice.java
-│   │   ├── VeriFactuBreakdown.java
-│   │   └── VeriFactuRecipient.java
-│   ├── models/             # Modelos POJO
-│   │   ├── Invoice.java
-│   │   ├── Breakdown.java
-│   │   ├── Recipient.java
-│   │   ├── InvoiceType.java
-│   │   ├── TaxType.java
-│   │   ├── RegimeType.java
-│   │   └── OperationType.java
-│   ├── services/           # Servicios
-│   │   ├── AeatClient.java
-│   │   ├── SignatureService.java
-│   │   └── VeriFactuConfig.java
-│   ├── helpers/            # Utilidades
-│   │   ├── HashHelper.java
-│   │   ├── XmlHelper.java
-│   │   ├── NifValidator.java
-│   │   ├── InvoiceValidator.java
-│   │   └── QrHelper.java
-│   └── exceptions/         # Excepciones personalizadas
-└── test/java/              # Tests unitarios
+│   ├── contracts/    # Interfaces (VeriFactuInvoice, VeriFactuBreakdown, VeriFactuRecipient)
+│   ├── models/       # Modelos POJO (Invoice, Breakdown, Recipient) y enums (InvoiceType, RegimeType, OperationType)
+│   ├── services/     # AeatClient, SignatureService, VeriFactuConfig
+│   ├── helpers/      # HashHelper, XmlHelper, NifValidator, InvoiceValidator
+│   └── aeat/         # Clases JAXB generadas automáticamente desde el WSDL/XSD de la AEAT (no editar a mano)
+└── test/java/
+    ├── com/squareetlabs/verifactu/examples/  # Ejemplos de uso compilables (ver arriba)
+    └── ...                                    # Tests unitarios
 ```
 
-## Dependencias
+## Dependencias principales
 
-- **Apache CXF 3.5.7**: SOAP/HTTP Secure transport
-- **EU DSS 5.11.1**: XAdES (XML Advanced Electronic Signatures)
-- **JAXB 2.3.8**: XML binding
-- **ZXing 3.5.3**: Generación de códigos QR
-- **JUnit 4.13.2**: Testing
+- **Apache CXF**: transporte SOAP/HTTPS
+- **EU DSS**: firma XAdES
+- **JAXB**: binding XML generado desde el WSDL/XSD oficial de la AEAT
+- **ZXing**: generación de códigos QR
+- **JUnit 4**: testing
 
 ## Requisitos
 
@@ -553,14 +233,31 @@ src/
 - Maven 3+
 - Certificado digital válido para firma electrónica
 
+## Documentación completa
+
+Toda la documentación detallada vive en la **[Wiki del proyecto](https://github.com/squareetlabs/verifactu-sdk/wiki)**:
+
+- [Instalación y configuración](https://github.com/squareetlabs/verifactu-sdk/wiki/Instalacion-y-Configuracion)
+- [Tipos de factura](https://github.com/squareetlabs/verifactu-sdk/wiki/Tipos-de-Factura)
+- [Facturas rectificativas](https://github.com/squareetlabs/verifactu-sdk/wiki/Facturas-Rectificativas)
+- [Representación de terceros](https://github.com/squareetlabs/verifactu-sdk/wiki/Representacion-de-Terceros)
+- [Sistemas multi-tenant / SaaS](https://github.com/squareetlabs/verifactu-sdk/wiki/Multi-Tenant-SaaS)
+- [Encadenamiento y hash](https://github.com/squareetlabs/verifactu-sdk/wiki/Encadenamiento-y-Hash)
+- [Validación de facturas](https://github.com/squareetlabs/verifactu-sdk/wiki/Validacion-de-Facturas)
+- [Generación de QR](https://github.com/squareetlabs/verifactu-sdk/wiki/Generacion-de-QR)
+- [Firma digital XAdES](https://github.com/squareetlabs/verifactu-sdk/wiki/Firma-Digital-XAdES)
+- [Solución de problemas](https://github.com/squareetlabs/verifactu-sdk/wiki/Solucion-de-Problemas)
+
+También se genera Javadoc completo, publicado automáticamente junto al paquete: [javadoc.io/doc/com.squareetlabs/verifactu](https://javadoc.io/doc/com.squareetlabs/verifactu).
+
 ## Contribuir
 
 Las contribuciones son bienvenidas. Por favor:
 
-1. Fork el proyecto
+1. Haz un fork del proyecto
 2. Crea una rama para tu feature (`git checkout -b feature/nueva-funcionalidad`)
-3. Commit tus cambios (`git commit -m 'feat: añadir nueva funcionalidad'`)
-4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
+3. Haz commit de tus cambios (`git commit -m 'feat: añadir nueva funcionalidad'`)
+4. Haz push a la rama (`git push origin feature/nueva-funcionalidad`)
 5. Abre un Pull Request
 
 ## Licencia
@@ -569,8 +266,8 @@ Este paquete es open-source bajo la [Licencia MIT](LICENSE).
 
 ## Soporte
 
-- **Documentación técnica AEAT**: [https://sede.agenciatributaria.gob.es/Sede/iva/sistemas-informaticos-facturacion-verifactu/informacion-tecnica.html](https://sede.agenciatributaria.gob.es/Sede/iva/sistemas-informaticos-facturacion-verifactu/informacion-tecnica.html)
-- **Issues**: [https://github.com/squareetlabs/verifactu-sdk/issues](https://github.com/squareetlabs/verifactu-sdk/issues)
+- **Documentación técnica AEAT**: [sede.agenciatributaria.gob.es - VeriFactu](https://sede.agenciatributaria.gob.es/Sede/iva/sistemas-informaticos-facturacion-verifactu/informacion-tecnica.html)
+- **Issues**: [github.com/squareetlabs/verifactu-sdk/issues](https://github.com/squareetlabs/verifactu-sdk/issues)
 
 ## Autores
 
