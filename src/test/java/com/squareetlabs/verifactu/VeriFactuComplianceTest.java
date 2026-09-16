@@ -43,6 +43,27 @@ public class VeriFactuComplianceTest {
     }
 
     /**
+     * Test annulment ("anulación") hash generation matches the official
+     * AEAT test vector ("Detalle de las especificaciones técnicas para la
+     * generación de la huella o hash de los registros de facturación",
+     * apartado 6.3, caso 3: registro de anulación encadenado).
+     */
+    @Test
+    public void testAnnulmentHashGenerationMatchesAEATExample() {
+        String hash = HashHelper.generateAnnulmentHash(
+                "89890001K", // IDEmisorFacturaAnulada
+                "12345679/G34", // NumSerieFacturaAnulada
+                "01-01-2024", // FechaExpedicionFacturaAnulada
+                "F7B94CFD8924EDFF273501B01EE5153E4CE8F259766F88CF6ACB8935802A2B97", // Huella anterior
+                "2024-01-01T19:20:40+01:00" // FechaHoraHusoGenRegistro
+        );
+
+        assertEquals(
+                "177547C0D57AC74748561D054A9CEC14B4C4EA23D1BEFD6F2E69E3A388F90C68",
+                hash);
+    }
+
+    /**
      * Test QR URL generation according to AEAT specifications.
      */
     @Test

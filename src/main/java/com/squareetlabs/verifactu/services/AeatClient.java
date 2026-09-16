@@ -3,6 +3,7 @@ package com.squareetlabs.verifactu.services;
 import com.squareetlabs.verifactu.contracts.VeriFactuInvoice;
 import com.squareetlabs.verifactu.contracts.VeriFactuBreakdown;
 import com.squareetlabs.verifactu.contracts.VeriFactuRecipient;
+import com.squareetlabs.verifactu.contracts.VeriFactuAnnulment;
 import com.squareetlabs.verifactu.helpers.HashHelper;
 import com.squareetlabs.verifactu.aeat.*;
 
@@ -218,6 +219,151 @@ public class AeatClient {
         }
     }
 
+    /**
+     * Requests the AEAT annulment ("anulación") of a previously generated
+     * billing record ({@code RegistroFacturacionAnulacionType}).
+     * <p>
+     * An annulment is a chained record just like an "alta" (see
+     * {@link #sendInvoice}): pass the response of whatever the immediately
+     * preceding record in the chain was (an invoice or a previous
+     * annulment) as {@code previous}, or {@code null}/empty if this is
+     * the very first record of the chain.
+     *
+     * @param annulment the annulment request
+     * @param previous  response map of the previous chained record, or null
+     * @return response map with the same shape as {@link #sendInvoice}
+     */
+    public Map<String, Object> sendAnnulment(VeriFactuAnnulment annulment, Map<String, Object> previous) {
+        try {
+            String issuerVat = config.getIssuerVat() != null ? config.getIssuerVat() : "";
+            String numSerie = annulment.getInvoiceNumber();
+            String fechaExp = annulment.getIssueDate().format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+
+            ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
+            String tsString = now.format(DateTimeFormatter.ofPattern("dd-MM-yyyy'T'HH:mm:ssXXX"));
+
+            GregorianCalendar c = GregorianCalendar.from(now);
+            XMLGregorianCalendar tsXml = DatatypeFactory.newInstance().newXMLGregorianCalendar(c);
+
+            String prevHash = "";
+            if (previous != null && previous.containsKey("hash")) {
+                prevHash = (String) previous.get("hash");
+            } else {
+                String ph = annulment.getPreviousHash();
+                if (ph != null) {
+                    prevHash = ph;
+                }
+            }
+
+            String huella = HashHelper.generateAnnulmentHash(issuerVat, numSerie, fechaExp, prevHash, tsString);
+
+            CabeceraType cabecera = buildHeader(
+                    config.getIssuerName() != null ? config.getIssuerName() : "", issuerVat);
+
+            RegistroFacturacionAnulacionType registroAnulacion = new RegistroFacturacionAnulacionType();
+            registroAnulacion.setIDVersion("1.0");
+
+            IDFacturaExpedidaBajaType idFactura = new IDFacturaExpedidaBajaType();
+            idFactura.setIDEmisorFacturaAnulada(issuerVat);
+            idFactura.setNumSerieFacturaAnulada(numSerie);
+            idFactura.setFechaExpedicionFacturaAnulada(fechaExp);
+            registroAnulacion.setIDFactura(idFactura);
+
+            if (annulment.getExternalReference() != null) {
+                registroAnulacion.setRefExterna(annulment.getExternalReference());
+            }
+
+            if (annulment.isNotRegisteredAtAeat()) {
+                registroAnulacion.setSinRegistroPrevio(SinRegistroPrevioType.S);
+            }
+
+            if (annulment.isRetryAfterRejection()) {
+                registroAnulacion.setRechazoPrevio(RechazoPrevioAnulacionType.S);
+            }
+
+            applyAnnulmentGenerator(registroAnulacion, annulment);
+
+            registroAnulacion.setEncadenamiento(buildAnnulmentChaining(previous, issuerVat));
+            registroAnulacion.setSistemaInformatico(buildAnnulmentSystemInfo());
+
+            registroAnulacion.setFechaHoraHusoGenRegistro(tsXml);
+            registroAnulacion.setTipoHuella("01");
+            registroAnulacion.setHuella(huella);
+
+            RegistroFacturaType registroFactura = new RegistroFacturaType();
+            registroFactura.setRegistroAnulacion(registroAnulacion);
+
+            List<RegistroFacturaType> listaRegistros = new ArrayList<>();
+            listaRegistros.add(registroFactura);
+
+            return performSoapCall(cabecera, listaRegistros, huella, numSerie, fechaExp, tsString);
+
+        } catch (Exception e) {
+            Map<String, Object> errorMap = new HashMap<>();
+            errorMap.put("status", "error");
+            errorMap.put("message", e.getMessage());
+            e.printStackTrace();
+            return errorMap;
+        }
+    }
+
+    private RegistroFacturacionAnulacionType.Encadenamiento buildAnnulmentChaining(
+            Map<String, Object> previous, String issuerVat) {
+        RegistroFacturacionAnulacionType.Encadenamiento enc = new RegistroFacturacionAnulacionType.Encadenamiento();
+
+        if (previous == null || previous.isEmpty()) {
+            enc.setPrimerRegistro(PrimerRegistroCadenaType.S);
+        } else {
+            EncadenamientoFacturaAnteriorType prev = new EncadenamientoFacturaAnteriorType();
+            prev.setIDEmisorFactura(issuerVat);
+            prev.setNumSerieFactura((String) previous.get("number"));
+            prev.setFechaExpedicionFactura((String) previous.get("date"));
+            prev.setHuella((String) previous.get("hash"));
+            enc.setRegistroAnterior(prev);
+        }
+        return enc;
+    }
+
+    private SistemaInformaticoType buildAnnulmentSystemInfo() {
+        SistemaInformaticoType si = new SistemaInformaticoType();
+        si.setNombreRazon(config.getDeveloperName());
+        si.setNIF(config.getDeveloperNif());
+        si.setNombreSistemaInformatico(config.getSystemName());
+        si.setIdSistemaInformatico(config.getSystemId());
+        si.setVersion(config.getSystemVersion());
+        si.setNumeroInstalacion(config.getInstallationNumber());
+        si.setTipoUsoPosibleSoloVerifactu(SiNoType.fromValue(config.getOnlyVerifactuCapable()));
+        si.setTipoUsoPosibleMultiOT(SiNoType.fromValue(config.getMultiObligatedCapable()));
+        si.setIndicadorMultiplesOT(SiNoType.fromValue(config.getHasMultipleObligated()));
+        return si;
+    }
+
+    /**
+     * Fills {@code GeneradoPor} and {@code Generador} when this annulment
+     * record was NOT generated by the obligado itself (see
+     * {@link VeriFactuAnnulment#getGeneratedBy()}).
+     */
+    private void applyAnnulmentGenerator(
+            RegistroFacturacionAnulacionType registroAnulacion, VeriFactuAnnulment annulment) {
+        String generatedBy = annulment.getGeneratedBy();
+        if (generatedBy == null || generatedBy.trim().isEmpty()) {
+            return;
+        }
+
+        registroAnulacion.setGeneradoPor(GeneradoPorType.fromValue(generatedBy));
+
+        String generatorName = annulment.getGeneratorName();
+        String generatorTaxId = annulment.getGeneratorTaxId();
+        if (generatorName == null || generatorTaxId == null) {
+            throw new IllegalArgumentException(
+                    "generatorName and generatorTaxId are required when generatedBy is \"T\" or \"D\"");
+        }
+        PersonaFisicaJuridicaType generador = new PersonaFisicaJuridicaType();
+        generador.setNombreRazon(generatorName);
+        generador.setNIF(generatorTaxId);
+        registroAnulacion.setGenerador(generador);
+    }
+
     private CabeceraType buildHeader(String issuerName, String issuerVat) {
         CabeceraType cabecera = new CabeceraType();
         PersonaFisicaJuridicaESType obligado = new PersonaFisicaJuridicaESType();
@@ -424,9 +570,20 @@ public class AeatClient {
     private Map<String, Object> performSoapCall(CabeceraType cabecera, List<RegistroFacturaType> registros,
             String huella, String numSerie, String fechaExp, String ts) {
         try {
-            // Lazy init service
+            // Lazy init service. The WSDL is loaded from the classpath (it is
+            // bundled inside src/main/resources and packaged into the jar),
+            // NOT from a relative filesystem path: a relative "src/main/..."
+            // path only exists in this repository's own working directory
+            // and breaks for any consumer that depends on the published
+            // artifact (e.g. running from a different working directory, or
+            // packaged into a fat/shaded jar).
             if (service == null) {
-                URL wsdlUrl = new File("src/main/resources/SistemaFacturacion.wsdl").toURI().toURL();
+                URL wsdlUrl = AeatClient.class.getClassLoader().getResource("SistemaFacturacion.wsdl");
+                if (wsdlUrl == null) {
+                    throw new IllegalStateException(
+                            "SistemaFacturacion.wsdl not found in classpath. It must be bundled as a "
+                                    + "resource of the verifactu-sdk artifact.");
+                }
                 service = new SfVerifactu(wsdlUrl);
             }
 
