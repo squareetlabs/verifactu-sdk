@@ -13,7 +13,8 @@ Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu 
 - **Cliente AEAT** configurable con Apache CXF (SOAP)
 - **Firma digital XAdES** con EU DSS
 - **Validación local** de facturas (NIF/CIF, consistencia de importes, campos obligatorios)
-- **Modos duales**: VERI\*FACTU y NO VERI\*FACTU (Requerimiento)
+- **Modos duales**: VERI\*FACTU (remisión síncrona a la AEAT) y NO VERI\*FACTU (Requerimiento) — en NO VERI\*FACTU el registro se genera, encadena y firma con **XAdES** igualmente en local, pero no se remite en tiempo real
+- **Verificación de integridad de la cadena**: `HashHelper.verify(hash, inputString)` permite comprobar de forma independiente que un registro no ha sido alterado
 - **Generación de URL/QR** de validación según especificaciones AEAT
 - **Encadenamiento** entre registros, facturas rectificativas y asientos resumen
 - **Anulación** de registros de facturación ya remitidos (`AeatClient#sendAnnulment`, `RegistroFacturacionAnulacionType`)
@@ -111,15 +112,31 @@ invoice.setBreakdowns(Collections.singletonList(breakdown));
 Map<String, Object> response = client.sendInvoice(invoice, null);
 
 if ("success".equals(response.get("status"))) {
-    System.out.println("CSV: " + response.get("csv"));
     System.out.println("Huella (hash): " + response.get("hash"));
+    System.out.println("¿Se remitió a la AEAT?: " + response.get("submittedToAeat"));
     System.out.println("Estado AEAT: " + response.get("aeat_status"));
+    if (Boolean.TRUE.equals(response.get("submittedToAeat"))) {
+        System.out.println("CSV: " + response.get("csv")); // solo presente en modo VERI*FACTU
+    }
 } else {
     System.out.println("Error: " + response.get("message"));
 }
 ```
 
 > Ejemplo completo y compilable: [`BasicInvoiceExample.java`](src/test/java/com/squareetlabs/verifactu/examples/BasicInvoiceExample.java)
+
+### Respuesta según el modo (VERI\*FACTU vs NO VERI\*FACTU)
+
+El `Map<String, Object>` devuelto por `sendInvoice`/`sendAnnulment` tiene siempre las claves `status`, `hash`, `hashInput`, `number`, `date`, `timestamp` y `submittedToAeat`. El resto depende del quinto parámetro de `AeatClient` (`verifactuMode`):
+
+| Clave | Modo VERI\*FACTU (`verifactuMode=true`) | Modo NO VERI\*FACTU (`verifactuMode=false`) |
+|---|---|---|
+| `submittedToAeat` | `true` | `false` |
+| `aeat_status` | Estado devuelto por la AEAT (`Correcto`, `AceptadoConErrores`, ...) | `"NoRemitido"` (no hay llamada SOAP) |
+| `csv` | Presente | Ausente |
+| `signedXml` | Ausente | Presente: XML del registro firmado con **XAdES** (Base64), es el documento que debes conservar como registro legal |
+
+En **ambos modos** el hash se calcula y encadena exactamente igual (misma huella, mismo `Encadenamiento`), y `hashInput` contiene la cadena exacta usada para calcular `hash` (útil para verificarlo después con `HashHelper.verify`, ver [Encadenamiento y hash](https://github.com/squareetlabs/verifactu-sdk/wiki/Encadenamiento-y-Hash)). La diferencia real es que en NO VERI\*FACTU (RD 1007/2023) el registro no se remite en tiempo real a la AEAT: el obligado lo conserva íntegro, firmado y accesible para una posible inspección — por eso aquí la firma XAdES es obligatoria, mientras que en VERI\*FACTU es la propia remisión en tiempo real la que aporta esa garantía de integridad.
 
 ## Tipos de factura soportados
 
@@ -217,6 +234,10 @@ byte[] qrPng = invoice.getValidationQR(false, 300);  // PNG de 300x300 px
 Ejemplo completo: [`QrCodeExample.java`](src/test/java/com/squareetlabs/verifactu/examples/QrCodeExample.java)
 
 ## Firma digital XAdES
+
+En **modo NO VERI\*FACTU** (`verifactuMode=false`), `AeatClient` invoca internamente `SignatureService` para firmar el registro antes de devolverlo (ver `response.get("signedXml")`) — no necesitas hacer nada adicional. En modo VERI\*FACTU la integridad la aporta la propia remisión síncrona a la AEAT (TLS mutuo con el certificado), por lo que la firma XAdES explícita es opcional.
+
+Si necesitas firmar XML por tu cuenta (por ejemplo, para archivar copias firmadas fuera del flujo de `sendInvoice`/`sendAnnulment`), puedes usar `SignatureService` directamente:
 
 ```java
 import com.squareetlabs.verifactu.services.SignatureService;
