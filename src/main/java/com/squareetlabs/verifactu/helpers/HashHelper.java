@@ -115,6 +115,30 @@ public class HashHelper {
         return sha256(inputString.toString()).toUpperCase();
     }
 
+    /**
+     * Verifies that {@code hash} is exactly the SHA-256 digest of {@code inputString}, i.e. that
+     * a previously generated/stored record has not been tampered with.
+     * <p>
+     * Callers should persist the {@code inputString} returned by {@link #generateInvoiceHash(Map)}
+     * / {@link #generateAnnulmentHash(Map)} alongside the {@code hash} itself, precisely to be able
+     * to call this method later for an independent re-verification - required both to check the
+     * integrity of the chain and, before generating a new record, to verify that the chaining with
+     * the previous record is correct (RD 1007/2023, modalidad "NO VERI*FACTU": el sistema debe
+     * ofrecer la posibilidad de comprobar las huellas y comprobar obligatoriamente el
+     * encadenamiento al crear cada nuevo registro).
+     *
+     * @param hash        the stored/expected hash (case-insensitive hex SHA-256).
+     * @param inputString the exact string the hash was computed over.
+     * @return {@code true} if the hash matches; {@code false} if either argument is {@code null}
+     * or the hash does not match.
+     */
+    public static boolean verify(String hash, String inputString) {
+        if (hash == null || inputString == null) {
+            return false;
+        }
+        return hash.equalsIgnoreCase(sha256(inputString));
+    }
+
     private static void validateData(Set<String> requiredFields, Set<String> dataTheKeys) {
         Set<String> missing = new HashSet<>(requiredFields);
         missing.removeAll(dataTheKeys);

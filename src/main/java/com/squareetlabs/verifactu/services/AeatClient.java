@@ -7,9 +7,13 @@ import com.squareetlabs.verifactu.contracts.VeriFactuAnnulment;
 import com.squareetlabs.verifactu.helpers.HashHelper;
 import com.squareetlabs.verifactu.aeat.*;
 
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBElement;
+import javax.xml.bind.Marshaller;
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.ws.Holder;
+import java.io.ByteArrayOutputStream;
 import java.net.URL;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
@@ -73,9 +77,26 @@ public class AeatClient {
                     prevHash = ph;
             }
 
-            // 2. Generate Hash (Huella)
-            String huella = HashHelper.generateInvoiceHash(
-                    issuerVat, numSerie, fechaExp, tipoFactura, cuotaTotal, importeTotal, prevHash, tsString);
+            // 2. Generate Hash (Huella). Uses the Map-based overload (instead of the
+            // positional-args one) purely to also obtain "inputString": the exact,
+            // deterministic string the hash was computed over, needed to allow
+            // independent re-verification of the chain later (both in VERI*FACTU and
+            // NO VERI*FACTU mode - see RD 1007/2023, art. 7: even without real-time
+            // remisión, the local record must let the "huella" of every record be
+            // checked, and every new record must verify the chaining with the
+            // previous one is correct before being generated).
+            Map<String, String> hashData = new HashMap<>();
+            hashData.put("issuer_tax_id", issuerVat);
+            hashData.put("invoice_number", numSerie);
+            hashData.put("issue_date", fechaExp);
+            hashData.put("invoice_type", tipoFactura);
+            hashData.put("total_tax", cuotaTotal);
+            hashData.put("total_amount", importeTotal);
+            hashData.put("previous_hash", prevHash);
+            hashData.put("generated_at", tsString);
+            Map<String, String> hashResult = HashHelper.generateInvoiceHash(hashData);
+            String huella = hashResult.get("hash");
+            String huellaInputString = hashResult.get("inputString");
 
             // 3. Build JAXB Objects
             CabeceraType cabecera = buildHeader(issuerName, issuerVat);
@@ -207,8 +228,19 @@ public class AeatClient {
             List<RegistroFacturaType> listaRegistros = new ArrayList<>();
             listaRegistros.add(registroFactura);
 
-            // 4. Send via SOAP
-            return performSoapCall(cabecera, listaRegistros, huella, numSerie, fechaExp, tsString);
+            // 4. Send via SOAP, UNLESS this client operates in "NO VERI*FACTU" mode
+            // (RD 1007/2023, modalidad sin remisión inmediata): the record must still
+            // be generated, hashed/chained exactly the same way, and signed (XAdES is
+            // mandatory in this mode - the real-time remisión that provides that
+            // integrity guarantee in VERI*FACTU mode does not happen here), but it is
+            // NOT transmitted to the AEAT; it is kept by the obligado, available for a
+            // future inspection.
+            if (!verifactuMode) {
+                JAXBElement<RegistroFacturacionAltaType> element =
+                        new ObjectFactory().createRegistroAlta(registroAlta);
+                return buildLocalOnlyResponse(element, huella, huellaInputString, numSerie, fechaExp, tsString);
+            }
+            return performSoapCall(cabecera, listaRegistros, huella, huellaInputString, numSerie, fechaExp, tsString);
 
         } catch (Exception e) {
             Map<String, Object> errorMap = new HashMap<>();
@@ -255,7 +287,15 @@ public class AeatClient {
                 }
             }
 
-            String huella = HashHelper.generateAnnulmentHash(issuerVat, numSerie, fechaExp, prevHash, tsString);
+            Map<String, String> hashData = new HashMap<>();
+            hashData.put("issuer_tax_id", issuerVat);
+            hashData.put("invoice_number", numSerie);
+            hashData.put("issue_date", fechaExp);
+            hashData.put("previous_hash", prevHash);
+            hashData.put("generated_at", tsString);
+            Map<String, String> hashResult = HashHelper.generateAnnulmentHash(hashData);
+            String huella = hashResult.get("hash");
+            String huellaInputString = hashResult.get("inputString");
 
             CabeceraType cabecera = buildHeader(
                     config.getIssuerName() != null ? config.getIssuerName() : "", issuerVat);
@@ -296,7 +336,12 @@ public class AeatClient {
             List<RegistroFacturaType> listaRegistros = new ArrayList<>();
             listaRegistros.add(registroFactura);
 
-            return performSoapCall(cabecera, listaRegistros, huella, numSerie, fechaExp, tsString);
+            if (!verifactuMode) {
+                JAXBElement<RegistroFacturacionAnulacionType> element =
+                        new ObjectFactory().createRegistroAnulacion(registroAnulacion);
+                return buildLocalOnlyResponse(element, huella, huellaInputString, numSerie, fechaExp, tsString);
+            }
+            return performSoapCall(cabecera, listaRegistros, huella, huellaInputString, numSerie, fechaExp, tsString);
 
         } catch (Exception e) {
             Map<String, Object> errorMap = new HashMap<>();
@@ -568,7 +613,7 @@ public class AeatClient {
     }
 
     private Map<String, Object> performSoapCall(CabeceraType cabecera, List<RegistroFacturaType> registros,
-            String huella, String numSerie, String fechaExp, String ts) {
+            String huella, String huellaInputString, String numSerie, String fechaExp, String ts) {
         try {
             // Lazy init service. The WSDL is loaded from the classpath (it is
             // bundled inside src/main/resources and packaged into the jar),
@@ -607,9 +652,11 @@ public class AeatClient {
             response.put("aeat_status", estadoH.value != null ? estadoH.value.value() : "UNKNOWN");
             response.put("csv", csvH.value);
             response.put("hash", huella);
+            response.put("hashInput", huellaInputString);
             response.put("number", numSerie);
             response.put("date", fechaExp);
             response.put("timestamp", ts);
+            response.put("submittedToAeat", true);
 
             return response;
 
@@ -620,6 +667,56 @@ public class AeatClient {
             e.printStackTrace();
             return response;
         }
+    }
+
+    /**
+     * Builds the response for "NO VERI*FACTU" mode (RD 1007/2023): the billing record is
+     * generated, hashed/chained and signed (XAdES) exactly as it would be for VERI*FACTU, but it
+     * is never transmitted to the AEAT - it stays under the obligado's custody, integral and
+     * accessible, for a possible future inspection. The signed XML is returned so the caller can
+     * persist it as the actual legal record (not just the parsed fields).
+     */
+    private Map<String, Object> buildLocalOnlyResponse(JAXBElement<?> registroElement, String huella,
+            String huellaInputString, String numSerie, String fechaExp, String ts) {
+        try {
+            byte[] signedXml = marshalAndSign(registroElement);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "success");
+            response.put("aeat_status", "NoRemitido");
+            response.put("submittedToAeat", false);
+            response.put("hash", huella);
+            response.put("hashInput", huellaInputString);
+            response.put("number", numSerie);
+            response.put("date", fechaExp);
+            response.put("timestamp", ts);
+            response.put("signedXml", Base64.getEncoder().encodeToString(signedXml));
+            return response;
+        } catch (Exception e) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("status", "error");
+            response.put("message", e.getMessage());
+            e.printStackTrace();
+            return response;
+        }
+    }
+
+    /**
+     * Marshals a single JAXB billing record element (RegistroAlta/RegistroAnulacion) to XML and
+     * signs it with XAdES using the same corporate certificate used for SOAP mutual TLS - see
+     * {@link SignatureService}. Used only in "NO VERI*FACTU" mode, where this signature is what
+     * provides the integrity guarantee that real-time remisión provides in VERI*FACTU mode.
+     */
+    private byte[] marshalAndSign(JAXBElement<?> registroElement) throws Exception {
+        JAXBContext context = JAXBContext.newInstance(ObjectFactory.class);
+        Marshaller marshaller = context.createMarshaller();
+        marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.FALSE);
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        marshaller.marshal(registroElement, baos);
+
+        SignatureService signatureService = new SignatureService(certPath, certPassword);
+        return signatureService.signXml(baos.toByteArray());
     }
 
     private void configureSSL(Object port) throws Exception {
