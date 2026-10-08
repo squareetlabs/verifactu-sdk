@@ -43,8 +43,13 @@ jobs:
           gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
           gpg-passphrase-env-var: GPG_PASSPHRASE
 
+      # Se usa el Maven Wrapper (Maven 3.9.16 fijado en .mvn/wrapper) y no el
+      # Maven del runner: con Maven 3.10.0 (runner ubuntu-24.04 >= 20261004)
+      # central-publishing-maven-plugin 0.11.0 deja maven-metadata-local.xml en
+      # el bundle y Central lo rechaza con "Bundle has content that does NOT
+      # have a .pom file: com/squareetlabs/verifactu".
       - name: Publish to Maven Central
-        run: mvn -B -P release deploy -s $GITHUB_WORKSPACE/settings.xml
+        run: ./mvnw -B -P release deploy -s $GITHUB_WORKSPACE/settings.xml
         env:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
