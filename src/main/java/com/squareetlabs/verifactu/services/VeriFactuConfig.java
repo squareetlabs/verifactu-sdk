@@ -38,6 +38,13 @@ public class VeriFactuConfig {
     // relying on this static default.
     private String hasMultipleObligated = "N";
 
+    // Whether the certificate used to authenticate against the AEAT web service is a
+    // "certificado de sello" (electronic seal / sello de entidad, types 4 and 8 in @firma).
+    // The AEAT exposes a dedicated endpoint for these certificates (www10 / prewww10), so
+    // this MUST be true when a seal certificate is used. Defaults to false (personal or
+    // representative certificate) for backward compatibility.
+    private boolean sealCertificate = false;
+
     public VeriFactuConfig(String issuerName, String issuerVat) {
         this.issuerName = issuerName;
         this.issuerVat = issuerVat;
@@ -84,6 +91,14 @@ public class VeriFactuConfig {
     public boolean hasRepresentative() {
         return representativeName != null && !representativeName.trim().isEmpty()
                 && representativeVat != null && !representativeVat.trim().isEmpty();
+    }
+
+    public boolean isSealCertificate() {
+        return sealCertificate;
+    }
+
+    public void setSealCertificate(boolean sealCertificate) {
+        this.sealCertificate = sealCertificate;
     }
 
     public String getSystemName() {

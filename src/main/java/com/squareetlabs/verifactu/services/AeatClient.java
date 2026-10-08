@@ -612,6 +612,26 @@ public class AeatClient {
         }
     }
 
+    /**
+     * Selects the AEAT endpoint (WSDL port) according to the environment and the type of
+     * certificate used to authenticate:
+     * <ul>
+     * <li>production + personal/representative certificate: {@code www1.agenciatributaria.gob.es}</li>
+     * <li>production + seal certificate: {@code www10.agenciatributaria.gob.es}</li>
+     * <li>test (pre-production) + personal/representative certificate: {@code prewww1.aeat.es}</li>
+     * <li>test (pre-production) + seal certificate: {@code prewww10.aeat.es}</li>
+     * </ul>
+     * The AEAT rejects seal certificates on the non-seal endpoints (and vice versa), and the
+     * production endpoint must never be reached when the client was created for the test
+     * environment.
+     */
+    static SfPortTypeVerifactu selectPort(SfVerifactu service, boolean production, boolean sealCertificate) {
+        if (production) {
+            return sealCertificate ? service.getSistemaVerifactuSello() : service.getSistemaVerifactu();
+        }
+        return sealCertificate ? service.getSistemaVerifactuSelloPruebas() : service.getSistemaVerifactuPruebas();
+    }
+
     private Map<String, Object> performSoapCall(CabeceraType cabecera, List<RegistroFacturaType> registros,
             String huella, String huellaInputString, String numSerie, String fechaExp, String ts) {
         try {
@@ -632,7 +652,7 @@ public class AeatClient {
                 service = new SfVerifactu(wsdlUrl);
             }
 
-            SfPortTypeVerifactu port = service.getSistemaVerifactu();
+            SfPortTypeVerifactu port = selectPort(service, production, config.isSealCertificate());
             configureSSL(port);
 
             // Holders for response

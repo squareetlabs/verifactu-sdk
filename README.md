@@ -76,6 +76,21 @@ AeatClient client = new AeatClient(
 );
 ```
 
+#### Endpoint según entorno y tipo de certificado
+
+El cuarto parámetro (`production`) y `VeriFactuConfig#setSealCertificate` determinan a qué endpoint SOAP de la AEAT se remite el registro (solo aplica con `verifactuMode = true`):
+
+| `production` | `sealCertificate` | Endpoint |
+|---|---|---|
+| `false` | `false` (por defecto) | `https://prewww1.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP` |
+| `false` | `true` | `https://prewww10.aeat.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP` |
+| `true` | `false` | `https://www1.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP` |
+| `true` | `true` | `https://www10.agenciatributaria.gob.es/wlpl/TIKE-CONT/ws/SistemaFacturacion/VerifactuSOAP` |
+
+Si autenticas con un **certificado de sello** (sello electrónico / sello de entidad, tipos 4 y 8 en @firma) llama a `config.setSealCertificate(true)`: la AEAT sirve esos certificados en un endpoint propio (`www10` / `prewww10`).
+
+> Hasta la versión 1.3.0 el parámetro `production` no seleccionaba el endpoint y todos los envíos reales iban al de producción. Se corrige en 1.3.1.
+
 ## Uso rápido: crear y enviar una factura
 
 ```java
