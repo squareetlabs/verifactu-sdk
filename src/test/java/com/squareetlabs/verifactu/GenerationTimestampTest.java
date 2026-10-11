@@ -34,7 +34,7 @@ public class GenerationTimestampTest {
     private AeatClient client() {
         URL resource = getClass().getClassLoader().getResource("test-cert.p12");
         assertNotNull(resource);
-        return new AeatClient(resource.getPath(), "testpass123", new VeriFactuConfig("Empresa Test SL", "B72877814"), false, false);
+        return new AeatClient(resource.getPath(), "testpass123", com.squareetlabs.verifactu.TestConfig.of("Empresa Test SL", "B72877814"), false, false);
     }
 
     private Invoice invoice(ZonedDateTime generated) {
@@ -120,7 +120,7 @@ public class GenerationTimestampTest {
 
     @Test
     public void validator_warnsWhenTheTimestampIsInTheFuture() {
-        VeriFactuConfig config = new VeriFactuConfig("Empresa Test SL", "B72877814");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Empresa Test SL", "B72877814");
         Invoice future = invoice(ZonedDateTime.now(ZoneId.of("Europe/Madrid")).plusHours(2));
         future.setIssueDate(LocalDate.now(ZoneId.of("Europe/Madrid")));
 
@@ -132,7 +132,7 @@ public class GenerationTimestampTest {
 
     @Test
     public void validator_acceptsAPastTimestampWithoutWarnings() {
-        VeriFactuConfig config = new VeriFactuConfig("Empresa Test SL", "B72877814");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Empresa Test SL", "B72877814");
         Invoice past = invoice(ZonedDateTime.now(ZoneId.of("Europe/Madrid")).minusDays(2));
         past.setIssueDate(LocalDate.now(ZoneId.of("Europe/Madrid")).minusDays(2));
 

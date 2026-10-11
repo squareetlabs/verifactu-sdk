@@ -23,13 +23,13 @@ public class ThirdPartyRepresentationTest {
 
     @Test
     public void testHasRepresentativeIsFalseByDefault() {
-        VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Cliente S.L.", "B12345678");
         assertFalse(config.hasRepresentative());
     }
 
     @Test
     public void testHasRepresentativeRequiresBothNameAndVat() {
-        VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Cliente S.L.", "B12345678");
         config.setRepresentativeName("Odei Software S.L.");
         assertFalse(config.hasRepresentative());
 
@@ -39,7 +39,7 @@ public class ThirdPartyRepresentationTest {
 
     @Test
     public void testBuildHeaderOmitsRepresentanteWhenNotConfigured() throws Exception {
-        VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Cliente S.L.", "B12345678");
         AeatClient client = new AeatClient("/tmp/test.pem", null, config, false, true);
 
         CabeceraType cabecera = invokeBuildHeader(client, "Cliente S.L.", "B12345678");
@@ -51,7 +51,7 @@ public class ThirdPartyRepresentationTest {
 
     @Test
     public void testBuildHeaderIncludesRepresentanteWhenConfigured() throws Exception {
-        VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Cliente S.L.", "B12345678");
         config.setRepresentativeName("Odei Software S.L.");
         config.setRepresentativeVat("B87654321");
         AeatClient client = new AeatClient("/tmp/test.pem", null, config, false, true);
@@ -69,7 +69,7 @@ public class ThirdPartyRepresentationTest {
 
     @Test
     public void testApplyThirdPartyIssuanceOmittedByDefault() throws Exception {
-        VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Cliente S.L.", "B12345678");
         AeatClient client = new AeatClient("/tmp/test.pem", null, config, false, true);
 
         Invoice invoice = new Invoice();
@@ -84,7 +84,7 @@ public class ThirdPartyRepresentationTest {
 
     @Test
     public void testApplyThirdPartyIssuanceSetsTerceroWhenIssuedByThirdParty() throws Exception {
-        VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Cliente S.L.", "B12345678");
         AeatClient client = new AeatClient("/tmp/test.pem", null, config, false, true);
 
         Invoice invoice = new Invoice();
@@ -105,7 +105,7 @@ public class ThirdPartyRepresentationTest {
 
     @Test
     public void testApplyThirdPartyIssuanceSetsFlagOnlyForSelfBilling() throws Exception {
-        VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Cliente S.L.", "B12345678");
         AeatClient client = new AeatClient("/tmp/test.pem", null, config, false, true);
 
         Invoice invoice = new Invoice();
@@ -121,7 +121,7 @@ public class ThirdPartyRepresentationTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testApplyThirdPartyIssuanceRequiresThirdPartyData() throws Exception {
-        VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Cliente S.L.", "B12345678");
         AeatClient client = new AeatClient("/tmp/test.pem", null, config, false, true);
 
         Invoice invoice = new Invoice();
@@ -142,7 +142,7 @@ public class ThirdPartyRepresentationTest {
 
     @Test
     public void testIndicadorMultiplesOTFallsBackToConfigWhenInvoiceDoesNotOverride() throws Exception {
-        VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Cliente S.L.", "B12345678");
         config.setHasMultipleObligated("N");
         AeatClient client = new AeatClient("/tmp/test.pem", null, config, false, true);
 
@@ -157,7 +157,7 @@ public class ThirdPartyRepresentationTest {
 
     @Test
     public void testIndicadorMultiplesOTUsesPerInvoiceOverride() throws Exception {
-        VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Cliente S.L.", "B12345678");
         config.setHasMultipleObligated("N"); // static default says "N"...
 
         AeatClient client = new AeatClient("/tmp/test.pem", null, config, false, true);

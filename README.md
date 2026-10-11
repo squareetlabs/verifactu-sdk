@@ -29,7 +29,7 @@ Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu 
 <dependency>
     <groupId>com.squareetlabs</groupId>
     <artifactId>verifactu</artifactId>
-    <version>1.4.1</version>
+    <version>1.4.2</version>
 </dependency>
 ```
 
@@ -100,6 +100,12 @@ El SDK cubre la **remisión voluntaria VERI\*FACTU** (altas, anulaciones, subsan
 - Identificar con `IDOtro` al tercero emisor, al generador de una anulación o al productor del sistema informático (solo se admite NIF).
 
 ## Novedades
+
+**1.4.2** — Correcciones de la revisión independiente.
+- El cliente valida también la configuración (`InvoiceValidator.validate(config)`) antes de enviar: con el NIF de desarrollador por defecto (`B12345678`, inválido), `sendInvoice` y `sendAnnulment` devuelven `status=error`. Configura siempre `setDeveloperNif`.
+- Encadenamiento: `previous` debe traer `hash`, `number` y `date`, y `setPreviousHash` sin `previous` se rechaza (antes la huella y el XML se contradecían: `PrimerRegistro = S` con una huella anterior en el cálculo).
+- **Timeouts de la llamada SOAP**: conexión 10 s y lectura 30 s por defecto (`config.setConnectTimeoutMillis(...)`, `config.setReadTimeoutMillis(...)`). Una AEAT que no responde ya no deja colgado al llamante: la respuesta es `status=error` con `timeout=true`. El registro pudo llegar a registrarse; reenvíalo sin cambios (misma fecha de generación, ver *Reenvío idempotente*). Con valores no positivos el cliente rechaza la configuración.
+- Validador: la `ClaveRegimen` 11 con IGIC ya no exige el 21 % (la regla es del IVA); la 20 con IGIC exige `CalificacionOperacion` N2; los fallos de `ClaveRegimen` con IPSI son error desde el 01/01/2027 (aviso hasta el 31/12/2026); `CuotaRecargoEquivalencia`, `BaseImponibleACoste` e importes de rectificación se validan como número finito. Un país de destinatario en blanco ya no rompe el envío.
 
 **1.4.1** — Fecha de generación del registro fijada por quien llama, para reenviar sin riesgo. `Invoice#setGenerationTimestamp` y `Annulment#setGenerationTimestamp` (`ZonedDateTime`, opcional) fijan `FechaHoraHusoGenRegistro`; sin valor, el cliente usa el instante actual como hasta ahora. Un reenvío con el mismo valor reproduce el mismo XML y la misma huella. El validador avisa si la fecha es posterior a la del sistema (la AEAT acepta el registro con errores). Los interfaces `VeriFactuInvoice` y `VeriFactuAnnulment` incorporan `getGenerationTimestamp()` como `default`.
 

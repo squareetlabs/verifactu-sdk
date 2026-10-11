@@ -40,6 +40,7 @@ public class IdempotentResendExample {
 
     public static void main(String[] args) {
         VeriFactuConfig config = new VeriFactuConfig("Mi Empresa S.L.", "B12345678");
+        config.setDeveloperNif("B72877814"); // NIF de tu sistema informatico (obligatorio)
         AeatClient client = new AeatClient("/ruta/al/certificado.p12", "password", config, false, true);
 
         // 1. Antes del primer envio, fija y GUARDA la fecha de generacion (y la huella anterior).
@@ -48,9 +49,10 @@ public class IdempotentResendExample {
         // 2. Primer intento. Si falla por comunicacion, no sabes si la AEAT lo registro.
         Map<String, Object> first = client.sendInvoice(standardWithFixedTimestamp(generatedAt), null);
 
-        // 3. Reintento con LOS MISMOS datos y LA MISMA fecha: mismo registro, misma huella. Si la AEAT
-        //    ya lo tenia, lo rechaza como duplicado; el detalle viene en aeat_record_errors (ver
-        //    ResponseHandlingExample) y el registro original sigue siendo valido.
+        // 3. Reintento con LOS MISMOS datos, LA MISMA fecha y EL MISMO registro anterior (aqui null: es el
+        //    primero de la cadena; si no, pasa el mismo "previous" que en el primer intento): mismo registro y
+        //    misma huella. Si la AEAT ya tenia un registro con ese identificador de factura, lo rechaza como
+        //    duplicado (no compara huellas): el detalle viene en aeat_record_errors (ver ResponseHandlingExample).
         if (!ResponseHandlingExample.isChainable(first)) {
             Map<String, Object> retry = client.sendInvoice(standardWithFixedTimestamp(generatedAt), null);
             System.out.println(retry.get("aeat_status"));

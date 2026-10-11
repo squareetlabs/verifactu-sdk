@@ -28,7 +28,7 @@ public class AeatBusinessRulesTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 11);
 
     private static VeriFactuConfig config() {
-        VeriFactuConfig config = new VeriFactuConfig("Empresa Test SL", "B72877814");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Empresa Test SL", "B72877814");
         config.setDeveloperNif("B72877814");
         return config;
     }
@@ -420,6 +420,66 @@ public class AeatBusinessRulesTest {
                 + "&numserie=12345678%26G33&fecha=01-01-2024&importe=241.40", invoice.getValidationUrl(false, false));
         assertEquals("https://www2.agenciatributaria.gob.es/wlpl/TIKE-CONT/ValidarQRNoVerifactu?nif=89890001K"
                 + "&numserie=12345678%26G33&fecha=01-01-2024&importe=241.40", invoice.getValidationUrl(true, false));
-        assertNull(null);
+    }
+
+    // ─── Correcciones de la revision independiente (1.4.2) ───────────────
+
+    private static Invoice igicInvoice(String regime, String qualification, double rate) {
+        Breakdown igic = new Breakdown(regime, qualification, rate, 100, rate);
+        igic.setTax("03");
+        Invoice invoice = invoice();
+        invoice.setBreakdowns(Collections.singletonList(igic));
+        invoice.setTaxAmount(rate);
+        invoice.setTotalAmount(100 + rate);
+        return invoice;
+    }
+
+    @Test
+    public void igicRegime11AcceptsItsOwnRatesAndVatRegime11StillNeedsTwentyOnePercent() {
+        assertValid(check(igicInvoice("11", "S1", 7)));
+        assertError(check(invoice("11", "S1", 10, 100, 10)), "ClaveRegimen 11");
+    }
+
+    @Test
+    public void igicRegime20NeedsOperationQualificationN2() {
+        assertError(check(igicInvoice("20", "S1", 7)), "ClaveRegimen 20");
+        Breakdown nonSubject = new Breakdown("20", "N2", 0, 100, 0);
+        nonSubject.setTax("03");
+        Invoice invoice = invoice();
+        invoice.setBreakdowns(Collections.singletonList(nonSubject));
+        invoice.setTaxAmount(0);
+        invoice.setTotalAmount(100);
+        assertValid(check(invoice));
+    }
+
+    @Test
+    public void ipsiRegimeIsAWarningUntilTheEndOf2026AndAnErrorAfterwards() {
+        Breakdown ipsi = new Breakdown("", "S1", 10, 100, 10);
+        ipsi.setTax("02");
+        Invoice invoice = invoice();
+        invoice.setBreakdowns(Collections.singletonList(ipsi));
+        invoice.setTaxAmount(10);
+        invoice.setTotalAmount(110);
+
+        ValidationResult before = InvoiceValidator.validate(invoice, config(), LocalDate.of(2026, 12, 31));
+        assertTrue(before.getErrors().toString(), before.isValid());
+        assertTrue(before.getWarnings().toString(), before.getWarnings().stream().anyMatch(w -> w.contains("IPSI")));
+
+        invoice.setIssueDate(LocalDate.of(2027, 1, 1));
+        assertError(InvoiceValidator.validate(invoice, config(), LocalDate.of(2027, 1, 1)), "ClaveRegimen obligatoria para IPSI");
+    }
+
+    @Test
+    public void nonFiniteAmountsInSurchargeCostBaseAndCorrectedAmountsAreErrors() {
+        Invoice invoice = invoice();
+        ((Breakdown) invoice.getBreakdowns().get(0)).setCuotaRecargoEquivalencia(Double.NaN);
+        assertError(check(invoice), "CuotaRecargoEquivalencia");
+
+        Invoice corrective = invoice("01", "S1", 21, 100, 21);
+        corrective.setInvoiceType(InvoiceType.R1);
+        corrective.setCorrectionType("S");
+        corrective.setCorrectedBaseAmount(Double.NaN);
+        corrective.setCorrectedTaxAmount(21.0);
+        assertError(check(corrective), "correctedBaseAmount");
     }
 }

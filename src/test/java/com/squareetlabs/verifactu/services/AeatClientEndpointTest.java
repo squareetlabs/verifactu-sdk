@@ -64,6 +64,6 @@ public class AeatClientEndpointTest {
 
     @Test
     public void sealCertificate_defaultsToFalse() {
-        assertEquals(false, new VeriFactuConfig("X", "B12345678").isSealCertificate());
+        assertEquals(false, com.squareetlabs.verifactu.TestConfig.of("X", "B12345678").isSealCertificate());
     }
 }
