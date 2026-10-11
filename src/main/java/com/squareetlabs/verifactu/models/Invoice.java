@@ -20,6 +20,7 @@ public class Invoice implements VeriFactuInvoice {
     private List<VeriFactuBreakdown> breakdowns = new ArrayList<>();
     private List<VeriFactuRecipient> recipients = new ArrayList<>();
     private String previousHash;
+    private java.time.ZonedDateTime generationTimestamp;
     private String operationDescription;
     private LocalDate operationDate;
     private String taxPeriod;
@@ -186,6 +187,15 @@ public class Invoice implements VeriFactuInvoice {
 
     public void setPreviousHash(String previousHash) {
         this.previousHash = previousHash;
+    }
+
+    @Override
+    public java.time.ZonedDateTime getGenerationTimestamp() {
+        return generationTimestamp;
+    }
+
+    public void setGenerationTimestamp(java.time.ZonedDateTime generationTimestamp) {
+        this.generationTimestamp = generationTimestamp;
     }
 
     @Override

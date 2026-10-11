@@ -84,6 +84,20 @@ public interface VeriFactuInvoice {
     String getPreviousHash();
 
     /**
+     * Instant the record was generated ({@code FechaHoraHusoGenRegistro}). Optional: when {@code null}
+     * the client uses the current instant at the moment of sending.
+     * <p>
+     * Persist it before the first send and return the same value on every retry: the hash is computed
+     * over it, so resending with the same value yields the same record (same hash, same XML) and the AEAT
+     * answers with a duplicate instead of a conflicting record.
+     *
+     * @return ZonedDateTime or null
+     */
+    default java.time.ZonedDateTime getGenerationTimestamp() {
+        return null;
+    }
+
+    /**
      * Get the operation description
      *
      * @return String

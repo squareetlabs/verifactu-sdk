@@ -14,6 +14,7 @@ public class Annulment implements VeriFactuAnnulment {
     private String invoiceNumber;
     private LocalDate issueDate;
     private String previousHash;
+    private java.time.ZonedDateTime generationTimestamp;
     private String externalReference;
     private boolean notRegisteredAtAeat;
     private boolean retryAfterRejection;
@@ -54,6 +55,15 @@ public class Annulment implements VeriFactuAnnulment {
 
     public void setPreviousHash(String previousHash) {
         this.previousHash = previousHash;
+    }
+
+    @Override
+    public java.time.ZonedDateTime getGenerationTimestamp() {
+        return generationTimestamp;
+    }
+
+    public void setGenerationTimestamp(java.time.ZonedDateTime generationTimestamp) {
+        this.generationTimestamp = generationTimestamp;
     }
 
     @Override
