@@ -240,8 +240,9 @@ public class VeriFactuComplianceTest {
 
         InvoiceValidator.ValidationResult result = InvoiceValidator.validate(invoice);
 
-        assertFalse(result.isValid());
-        assertTrue(result.getErrorMessage().contains("incoherente"));
+        // La AEAT solo avisa (acepta el registro con errores) cuando el total difiere mas de 10 EUR.
+        assertTrue(result.isValid());
+        assertTrue(result.getWarnings().toString(), result.getWarnings().toString().contains("incoherente"));
     }
 
     /**
@@ -255,6 +256,9 @@ public class VeriFactuComplianceTest {
         invoice.setIssuerTaxId("B72877814");
         invoice.setCustomerName("Cliente Test");
         invoice.setCustomerTaxId("12345678Z");
+        // Una F1 identifica al destinatario (Destinatarios es obligatorio en F1, F3 y R1-R4).
+        invoice.setRecipients(java.util.Collections.singletonList(
+                new com.squareetlabs.verifactu.models.Recipient("Cliente Test", "12345678Z")));
 
         // Crear desglose
         Breakdown breakdown = new Breakdown("01", "S1", 21.0, 100.0, 21.0);

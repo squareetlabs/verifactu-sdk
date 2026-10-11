@@ -21,6 +21,7 @@ public class Breakdown implements VeriFactuBreakdown {
     // Legacy fields (deprecated)
     @Deprecated
     private String regimeType;
+    private String tax;
     @Deprecated
     private String operationType;
 
@@ -151,5 +152,14 @@ public class Breakdown implements VeriFactuBreakdown {
     public void setOperationType(String operationType) {
         this.operationType = operationType;
         this.calificacionOperacion = operationType; // Keep new field in sync
+    }
+
+    @Override
+    public String getTax() {
+        return tax;
+    }
+
+    public void setTax(String tax) {
+        this.tax = tax;
     }
 }

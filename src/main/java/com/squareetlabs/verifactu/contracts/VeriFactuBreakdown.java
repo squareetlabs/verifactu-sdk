@@ -67,4 +67,13 @@ public interface VeriFactuBreakdown {
 
     @Deprecated
     String getOperationType();
+
+    /**
+     * Tax of the line ({@code Impuesto}): {@code "01"} IVA, {@code "02"} IPSI, {@code "03"} IGIC,
+     * {@code "05"} other. {@code null} (default) means IVA. The IVA-specific validations (rate
+     * lists, surcharge combinations) only apply to IVA.
+     */
+    default String getTax() {
+        return null;
+    }
 }

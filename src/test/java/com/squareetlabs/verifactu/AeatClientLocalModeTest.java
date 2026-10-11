@@ -5,6 +5,7 @@ import com.squareetlabs.verifactu.models.Annulment;
 import com.squareetlabs.verifactu.models.Breakdown;
 import com.squareetlabs.verifactu.models.Invoice;
 import com.squareetlabs.verifactu.models.InvoiceType;
+import com.squareetlabs.verifactu.models.Recipient;
 import com.squareetlabs.verifactu.services.AeatClient;
 import com.squareetlabs.verifactu.services.VeriFactuConfig;
 import org.junit.Test;
@@ -46,6 +47,7 @@ public class AeatClientLocalModeTest {
         invoice.setTaxAmount(21.0);
         invoice.setTotalAmount(121.0);
         invoice.setBreakdowns(Collections.singletonList(new Breakdown("01", "S1", 21.0, 100.0, 21.0)));
+        invoice.setRecipients(Collections.singletonList(new Recipient("Cliente Uno SL", "B12345674")));
         return invoice;
     }
 

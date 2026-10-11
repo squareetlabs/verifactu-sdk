@@ -34,7 +34,9 @@ public class ExamplesAreValidTest {
         examples.put("simplified (F2)", InvoiceTypesExample.simplified());
         examples.put("substituteOfSimplified (F3)", InvoiceTypesExample.substituteOfSimplified());
         examples.put("withForeignRecipient", InvoiceTypesExample.withForeignRecipient());
-        examples.put("withoutRecipientIdentification", InvoiceTypesExample.withoutRecipientIdentification());
+        examples.put("withoutRecipientIdentification (F2 + art. 6.1.d)", InvoiceTypesExample.withoutRecipientIdentification());
+        examples.put("reverseCharge (S2)", InvoiceTypesExample.reverseCharge());
+        examples.put("resentAfterRejection", InvoiceTypesExample.resentAfterRejection());
         examples.put("rectificativeBySubstitution", InvoiceTypesExample.rectificativeBySubstitution());
         examples.put("rectificativeByDifference", InvoiceTypesExample.rectificativeByDifference());
         return examples;

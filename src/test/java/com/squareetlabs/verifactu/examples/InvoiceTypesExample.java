@@ -100,8 +100,12 @@ public class InvoiceTypesExample {
         invoice.setInvoiceType(InvoiceType.F1);
         invoice.setTotalAmount(1000.00);
         invoice.setTaxAmount(0.0);
-        invoice.setBreakdowns(Collections.singletonList(
-                new Breakdown(RegimeType.EXPORTACION.getCode(), OperationType.N1.getCode(), 0.0, 1000.00, 0.0)));
+        // Exportacion: ClaveRegimen 02 solo admite operaciones exentas (E2 = art. 21 LIVA).
+        Breakdown export = new Breakdown();
+        export.setClaveRegimen(RegimeType.EXPORTACION.getCode());
+        export.setOperacionExenta("E2");
+        export.setBaseAmount(1000.00);
+        invoice.setBreakdowns(Collections.singletonList(export));
 
         invoice.setRecipients(Arrays.asList(
                 new Recipient("Foreign Client SARL", "FR12345678901", "FR", "02"),
@@ -110,15 +114,42 @@ public class InvoiceTypesExample {
     }
 
     /**
-     * Factura completa emitida SIN identificar al destinatario (art. 6.1.d RD 1619/2012,
-     * {@code FacturaSinIdentifDestinatarioArt61d = S}). Sustituye a los destinatarios, que deben
-     * estar vacios.
+     * Factura emitida SIN identificar al destinatario (art. 6.1.d RD 1619/2012). Es una factura
+     * simplificada (F2) o R5 marcada con {@code FacturaSinIdentifDestinatarioArt61d = S}: la AEAT
+     * solo admite la marca en F2 y R5, y esos tipos no llevan destinatarios. Al llevar la marca
+     * no se aplica el limite de 3.000 EUR de las simplificadas.
      */
     public static Invoice withoutRecipientIdentification() {
-        Invoice invoice = standard();
-        invoice.setInvoiceNumber("F2026-021");
-        invoice.setRecipients(Collections.emptyList());
+        Invoice invoice = simplified();
+        invoice.setInvoiceNumber("FS2026-002");
         invoice.setWithoutRecipientIdentification(true);
+        return invoice;
+    }
+
+    /**
+     * F1 de operacion con inversion del sujeto pasivo (S2): el tipo impositivo y la cuota se envian
+     * a 0 (la AEAT los exige y deben valer 0). Solo admite F1, F3 y R1-R4.
+     */
+    public static Invoice reverseCharge() {
+        Invoice invoice = standard();
+        invoice.setInvoiceNumber("F2026-022");
+        invoice.setTotalAmount(100.00);
+        invoice.setTaxAmount(0.0);
+        invoice.setBreakdowns(Collections.singletonList(
+                new Breakdown(RegimeType.GENERAL.getCode(), OperationType.S2.getCode(), 0.0, 100.00, 0.0)));
+        return invoice;
+    }
+
+    /**
+     * Reenvio de una factura que la AEAT rechazo: "alta por rechazo" ({@code Subsanacion = S} y
+     * {@code RechazoPrevio = X}). La clave de la factura no existe en la AEAT porque el alta
+     * anterior fue rechazada. Si la factura ya estaba registrada y solo se corrigen datos, usa
+     * solo {@code setSubsanation(true)} ("alta de subsanacion").
+     */
+    public static Invoice resentAfterRejection() {
+        Invoice invoice = standard();
+        invoice.setSubsanation(true);
+        invoice.setPreviousRejection("X");
         return invoice;
     }
 

@@ -176,6 +176,10 @@ public class AeatXsdValidationTest {
         invoice.setTaxAmount(tax);
         invoice.setTotalAmount(total);
         invoice.setBreakdowns(Arrays.asList(lines));
+        // F1, F3 and R1-R4 identify the recipient; F2 and R5 never do (AEAT validations).
+        if (type != InvoiceType.F2 && type != InvoiceType.R5) {
+            invoice.setRecipients(Collections.singletonList(new Recipient("Cliente Uno SL", "B12345674")));
+        }
         return invoice;
     }
 
@@ -283,6 +287,8 @@ public class AeatXsdValidationTest {
         invoice.setTaxAmount(4.2);
         invoice.setTotalAmount(24.2);
         invoice.setBreakdowns(Collections.singletonList(new Breakdown("01", "S1", 21.0, 20.0, 4.2)));
+        invoice.setRecipients(Collections.singletonList(new Recipient("Cliente Uno SL", "B12345674")));
+        invoice.setRecipients(Collections.singletonList(new Recipient("Cliente Uno SL", "B12345674")));
         return invoice;
     }
 
@@ -343,10 +349,14 @@ public class AeatXsdValidationTest {
     }
 
     @Test
-    public void reverseChargeOperation_carriesOnlyTheBase() {
+    public void reverseChargeOperation_carriesZeroRateAndZeroQuota() {
         Breakdown reverseCharge = new Breakdown("01", "S2", 0, 100, 0);
-        check("Inversion del sujeto pasivo",
-                client().sendInvoice(invoice("FCT2600016", InvoiceType.F1, 0, 100, reverseCharge), null), true);
+        Map<String, Object> response = client().sendInvoice(invoice("FCT2600016", InvoiceType.F1, 0, 100, reverseCharge), null);
+        check("Inversion del sujeto pasivo", response, true);
+        String xml = signedXml(response);
+        // S2: the AEAT requires TipoImpositivo = 0 and CuotaRepercutida = 0 (they cannot be missing).
+        assertEquals("0.00", first(xml, "TipoImpositivo"));
+        assertEquals("0.00", first(xml, "CuotaRepercutida"));
     }
 
     @Test
@@ -412,11 +422,68 @@ public class AeatXsdValidationTest {
 
     @Test
     public void withoutRecipientIdentification_art61d() {
-        Invoice invoice = invoice("FCT2600019", InvoiceType.F1, 4.2, 24.2, line(21, 20, 4.2));
+        Invoice invoice = invoice("FCT2600019", InvoiceType.F2, 4.2, 24.2, line(21, 20, 4.2));
         invoice.setWithoutRecipientIdentification(true);
         Map<String, Object> response = client().sendInvoice(invoice, null);
-        check("Factura sin identificacion del destinatario", response, true);
+        check("F2 sin identificacion del destinatario", response, true);
         assertEquals("S", first(signedXml(response), "FacturaSinIdentifDestinatarioArt61d"));
+    }
+
+    @Test
+    public void qualifiedSimplifiedAndMacrodato() {
+        Invoice qualified = invoice("FCT2600021", InvoiceType.F1, 4.2, 24.2, line(21, 20, 4.2));
+        qualified.setQualifiedSimplified(true);
+        Map<String, Object> response = client().sendInvoice(qualified, null);
+        check("Simplificada cualificada", response, true);
+        assertEquals("S", first(signedXml(response), "FacturaSimplificadaArt7273"));
+
+        Invoice macro = invoice("FCT2600022", InvoiceType.F1, 21_000_000, 121_000_000, line(21, 100_000_000, 21_000_000));
+        Map<String, Object> macroResponse = client().sendInvoice(macro, null);
+        check("Macrodato", macroResponse, true);
+        assertEquals("S", first(signedXml(macroResponse), "Macrodato"));
+        assertNull(first(signedXml(client().sendInvoice(
+                invoice("FCT2600023", InvoiceType.F1, 4.2, 24.2, line(21, 20, 4.2)), null)), "Macrodato"));
+    }
+
+    @Test
+    public void subsanationAndRejectionRetry_carryTheAeatFlags() {
+        Invoice rejectedBefore = invoice("FCT2600024", InvoiceType.F1, 4.2, 24.2, line(21, 20, 4.2));
+        rejectedBefore.setSubsanation(true);
+        rejectedBefore.setPreviousRejection("X"); // alta por rechazo
+        Map<String, Object> response = client().sendInvoice(rejectedBefore, null);
+        check("Alta por rechazo", response, true);
+        assertEquals("S", first(signedXml(response), "Subsanacion"));
+        assertEquals("X", first(signedXml(response), "RechazoPrevio"));
+
+        Invoice plainSubsanation = invoice("FCT2600025", InvoiceType.F1, 4.2, 24.2, line(21, 20, 4.2));
+        plainSubsanation.setSubsanation(true);
+        Map<String, Object> plain = client().sendInvoice(plainSubsanation, null);
+        check("Alta de subsanacion", plain, true);
+        assertEquals("S", first(signedXml(plain), "Subsanacion"));
+        assertNull(first(signedXml(plain), "RechazoPrevio"));
+
+        Invoice invalid = invoice("FCT2600026", InvoiceType.F1, 4.2, 24.2, line(21, 20, 4.2));
+        invalid.setPreviousRejection("X"); // sin Subsanacion = S
+        assertEquals("error", client().sendInvoice(invalid, null).get("status"));
+    }
+
+    @Test
+    public void coupon_isSentOnR1() {
+        Invoice invoice = invoice("RCT2600005", InvoiceType.R1, -4.2, -24.2, line(21, -20, -4.2));
+        invoice.setCorrectionType("I");
+        invoice.setCoupon(true);
+        Map<String, Object> response = client().sendInvoice(invoice, null);
+        check("Rectificativa con cupon", response, true);
+        assertEquals("S", first(signedXml(response), "Cupon"));
+    }
+
+    @Test
+    public void taxCode_igicIsSentAsImpuesto() {
+        Breakdown igic = new Breakdown("01", "S1", 7, 100, 7);
+        igic.setTax("03");
+        Map<String, Object> response = client().sendInvoice(invoice("FCT2600027", InvoiceType.F1, 7, 107, igic), null);
+        check("IGIC", response, true);
+        assertEquals("03", first(signedXml(response), "Impuesto"));
     }
 
     @Test

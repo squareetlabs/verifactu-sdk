@@ -174,7 +174,7 @@ public class InvoiceValidatorTest {
         assertError(check(invoice), "exactamente una");
 
         invoice.setBreakdowns(Collections.singletonList(new Breakdown("99", "S1", 21, 20, 4.2)));
-        assertError(check(invoice), "ClaveRegimen desconocida: 99");
+        assertError(check(invoice), "ClaveRegimen no válida para IVA (lista L8A): 99");
     }
 
     @Test
@@ -191,14 +191,29 @@ public class InvoiceValidatorTest {
     }
 
     @Test
-    public void totalsMustMatchTheBreakdown() {
+    public void totalsMismatchOnlyWarnsAndHasTenEuroMargin() {
         Invoice invoice = invoice();
+        invoice.setTotalAmount(33.0); // 8,80 de diferencia: dentro del margen
+        assertTrue(check(invoice).getWarnings().toString(), check(invoice).getWarnings().isEmpty());
+
         invoice.setTotalAmount(999.99);
-        assertError(check(invoice), "Total incoherente");
+        ValidationResult result = check(invoice);
+        assertTrue(result.getErrors().toString(), result.isValid());
+        assertWarning(result, "Importe total incoherente");
 
         Invoice tax = invoice();
-        tax.setTaxAmount(9);
-        assertError(check(tax), "Cuota total incoherente");
+        tax.setTaxAmount(40);
+        assertWarning(check(tax), "Cuota total incoherente");
+    }
+
+    @Test
+    public void totalsAreNotCheckedForRegimes03050608And09() {
+        for (String regime : new String[] {"03", "05", "09"}) {
+            Invoice invoice = invoice();
+            invoice.setBreakdowns(Collections.singletonList(new Breakdown(regime, "S1", 21, 20, 4.2)));
+            invoice.setTotalAmount(999.99);
+            assertTrue(regime, check(invoice).getWarnings().isEmpty());
+        }
     }
 
     @Test
@@ -251,12 +266,16 @@ public class InvoiceValidatorTest {
     }
 
     @Test
-    public void f3NeedsSubstitutedInvoices() {
-        Invoice invoice = invoice();
-        invoice.setInvoiceType(InvoiceType.F3);
-        assertError(check(invoice), "debe indicar las facturas que sustituye");
-        invoice.setSubstitutedInvoices(Collections.singletonList(new InvoiceReference("FS2600001", TODAY)));
-        assertTrue(check(invoice).getErrors().toString(), check(invoice).isValid());
+    public void substitutedInvoicesAreOptionalInF3AndForbiddenElsewhere() {
+        Invoice f3 = invoice();
+        f3.setInvoiceType(InvoiceType.F3);
+        assertTrue(check(f3).getErrors().toString(), check(f3).isValid());
+        f3.setSubstitutedInvoices(Collections.singletonList(new InvoiceReference("FS2600001", TODAY)));
+        assertTrue(check(f3).getErrors().toString(), check(f3).isValid());
+
+        Invoice f1 = invoice();
+        f1.setSubstitutedInvoices(Collections.singletonList(new InvoiceReference("FS2600001", TODAY)));
+        assertError(check(f1), "solo pueden informarse en facturas F3");
     }
 
     // ─── Destinatarios ─────────────────────────────────────────────
@@ -296,29 +315,71 @@ public class InvoiceValidatorTest {
     }
 
     @Test
-    public void f1WithoutRecipientWarnsAndArt61dResolvesIt() {
-        Invoice invoice = invoice();
-        invoice.setRecipients(Collections.<com.squareetlabs.verifactu.contracts.VeriFactuRecipient>emptyList());
-        assertWarning(check(invoice), "art. 6.1.d");
+    public void recipientsAreMandatoryInF1F3R1toR4AndForbiddenInF2R5() {
+        for (InvoiceType type : new InvoiceType[] {InvoiceType.F1, InvoiceType.F3}) {
+            Invoice invoice = invoice();
+            invoice.setInvoiceType(type);
+            invoice.setSubstitutedInvoices(type == InvoiceType.F3
+                    ? Collections.singletonList(new InvoiceReference("FS2600001", TODAY)) : Collections.emptyList());
+            invoice.setRecipients(Collections.<com.squareetlabs.verifactu.contracts.VeriFactuRecipient>emptyList());
+            assertError(check(invoice), "debe identificar al destinatario");
+        }
+        Invoice r1 = invoice();
+        r1.setInvoiceType(InvoiceType.R1);
+        r1.setCorrectionType("I");
+        r1.setRecipients(Collections.<com.squareetlabs.verifactu.contracts.VeriFactuRecipient>emptyList());
+        assertError(check(r1), "debe identificar al destinatario");
 
-        invoice.setWithoutRecipientIdentification(true);
-        ValidationResult result = check(invoice);
-        assertTrue(result.isValid());
-        assertTrue(result.getWarnings().toString(), result.getWarnings().isEmpty());
+        Invoice f2 = invoice();
+        f2.setInvoiceType(InvoiceType.F2);
+        assertError(check(f2), "no puede llevar destinatarios");
+        f2.setRecipients(Collections.<com.squareetlabs.verifactu.contracts.VeriFactuRecipient>emptyList());
+        assertTrue(check(f2).getErrors().toString(), check(f2).isValid());
     }
 
     @Test
-    public void art61dCannotCarryRecipients() {
+    public void art61dFlagOnlyInF2AndR5() {
+        Invoice f2 = invoice();
+        f2.setInvoiceType(InvoiceType.F2);
+        f2.setRecipients(Collections.<com.squareetlabs.verifactu.contracts.VeriFactuRecipient>emptyList());
+        f2.setWithoutRecipientIdentification(true);
+        ValidationResult ok = check(f2);
+        assertTrue(ok.getErrors().toString(), ok.isValid());
+        assertTrue(ok.getWarnings().toString(), ok.getWarnings().isEmpty());
+
+        Invoice f1 = invoice();
+        f1.setWithoutRecipientIdentification(true);
+        assertError(check(f1), "solo puede informarse en facturas F2 o R5");
+    }
+
+    @Test
+    public void art61dWithRecipientsInF2IsRejected() {
         Invoice invoice = invoice();
+        invoice.setInvoiceType(InvoiceType.F2);
         invoice.setWithoutRecipientIdentification(true);
         assertError(check(invoice), "no puede llevar destinatarios");
     }
 
     @Test
-    public void simplifiedInvoiceWithRecipientWarns() {
-        Invoice invoice = invoice();
-        invoice.setInvoiceType(InvoiceType.F2);
-        assertWarning(check(invoice), "simplificada");
+    public void simplifiedInvoiceLimitAndQualifiedFlag() {
+        Invoice big = invoice();
+        big.setInvoiceType(InvoiceType.F2);
+        big.setRecipients(Collections.<com.squareetlabs.verifactu.contracts.VeriFactuRecipient>emptyList());
+        big.setBreakdowns(Collections.singletonList(new Breakdown("01", "S1", 21, 3000, 630)));
+        big.setTaxAmount(630);
+        big.setTotalAmount(3630);
+        assertError(check(big), "no puede superar 3.000,00");
+        big.setWithoutRecipientIdentification(true); // el limite no se aplica con el art. 6.1.d
+        assertTrue(check(big).getErrors().toString(), check(big).isValid());
+
+        Invoice qualified = invoice();
+        qualified.setQualifiedSimplified(true);
+        assertTrue(check(qualified).getErrors().toString(), check(qualified).isValid());
+        Invoice f2 = invoice();
+        f2.setInvoiceType(InvoiceType.F2);
+        f2.setRecipients(Collections.<com.squareetlabs.verifactu.contracts.VeriFactuRecipient>emptyList());
+        f2.setQualifiedSimplified(true);
+        assertError(check(f2), "FacturaSimplificadaArt7273 solo puede informarse");
     }
 
     // ─── Otros campos ──────────────────────────────────────────────
@@ -373,7 +434,7 @@ public class InvoiceValidatorTest {
         assertError(result, "NIF emisor inválido");
         assertError(result, "Razón social del emisor obligatorio");
         assertError(result, "NIF del desarrollador inválido");
-        assertError(result, "Identificador del sistema informático demasiado largo");
+        assertError(result, "debe tener exactamente dos posiciones");
         assertError(result, "Nombre del sistema informático demasiado largo");
         assertError(result, "representante necesita razón social y NIF");
 

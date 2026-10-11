@@ -41,6 +41,10 @@ public class Invoice implements VeriFactuInvoice {
     private List<VeriFactuInvoiceReference> rectifiedInvoices = new ArrayList<>();
     private List<VeriFactuInvoiceReference> substitutedInvoices = new ArrayList<>();
     private boolean withoutRecipientIdentification;
+    private boolean subsanation;
+    private String previousRejection;
+    private boolean qualifiedSimplified;
+    private boolean coupon;
 
     @Override
     public String getInvoiceNumber() {
@@ -319,14 +323,28 @@ public class Invoice implements VeriFactuInvoice {
      * @return The validation URL
      */
     public String getValidationUrl(boolean production) {
+        return getValidationUrl(production, true);
+    }
+
+    /**
+     * URL of the AEAT invoice lookup service for the QR code. The AEAT publishes two services:
+     * {@code ValidarQR} for systems issuing verifiable invoices (VERI*FACTU) and
+     * {@code ValidarQRNoVerifactu} for the rest.
+     *
+     * @param production   true for production, false for the external test environment
+     * @param verifactuMode true when the system issues verifiable invoices (VERI*FACTU)
+     */
+    public String getValidationUrl(boolean production, boolean verifactuMode) {
         if (issuerTaxId == null || invoiceNumber == null || issueDate == null) {
             throw new IllegalStateException(
                     "Cannot generate validation URL: issuerTaxId, invoiceNumber, and issueDate are required");
         }
 
-        String baseUrl = production
-                ? "https://www2.aeat.es/wlpl/TIKE-CONT/ValidarQR"
-                : "https://prewww2.aeat.es/wlpl/TIKE-CONT/ValidarQR";
+        String host = production
+                ? "https://www2.agenciatributaria.gob.es"
+                : "https://prewww2.aeat.es";
+        String service = verifactuMode ? "ValidarQR" : "ValidarQRNoVerifactu";
+        String baseUrl = host + "/wlpl/TIKE-CONT/" + service;
 
         String fecha = issueDate.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"));
 
@@ -334,8 +352,8 @@ public class Invoice implements VeriFactuInvoice {
                 .setScale(2, java.math.RoundingMode.HALF_UP);
         String importe = amount.signum() == 0 ? "0.00" : amount.toPlainString();
 
-        // AEAT QR specification: every parameter value is URL-encoded (a series such as
-        // "A/2026 1" must not break the query string).
+        // AEAT QR specification: every parameter value is URL-encoded (UTF-8); a series such as
+        // "A/2026 1" must not break the query string. Only these four parameters may go in the QR.
         return String.format("%s?nif=%s&numserie=%s&fecha=%s&importe=%s",
                 baseUrl,
                 urlEncode(issuerTaxId),
@@ -362,14 +380,34 @@ public class Invoice implements VeriFactuInvoice {
      * @throws Exception if QR code generation fails
      */
     public byte[] getValidationQR(boolean production, int size) throws Exception {
-        String url = getValidationUrl(production);
+        return getValidationQR(production, true, size);
+    }
+
+    /**
+     * Generates the QR code image of the validation URL. The AEAT requires ISO/IEC 18004:2015 with
+     * error correction level M and a printed size between 30x30 and 40x40 mm.
+     *
+     * @param production    true for production, false for the external test environment
+     * @param verifactuMode true when the system issues verifiable invoices (VERI*FACTU)
+     * @param size          the size of the QR code image in pixels (width and height)
+     * @return byte array containing the QR code image in PNG format
+     */
+    public byte[] getValidationQR(boolean production, boolean verifactuMode, int size) throws Exception {
+        String url = getValidationUrl(production, verifactuMode);
+
+        java.util.Map<com.google.zxing.EncodeHintType, Object> hints = new java.util.HashMap<>();
+        hints.put(com.google.zxing.EncodeHintType.ERROR_CORRECTION,
+                com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.M);
+        hints.put(com.google.zxing.EncodeHintType.CHARACTER_SET, "UTF-8");
+        hints.put(com.google.zxing.EncodeHintType.MARGIN, 1);
 
         com.google.zxing.qrcode.QRCodeWriter qrCodeWriter = new com.google.zxing.qrcode.QRCodeWriter();
         com.google.zxing.common.BitMatrix bitMatrix = qrCodeWriter.encode(
                 url,
                 com.google.zxing.BarcodeFormat.QR_CODE,
                 size,
-                size);
+                size,
+                hints);
 
         java.io.ByteArrayOutputStream pngOutputStream = new java.io.ByteArrayOutputStream();
         com.google.zxing.client.j2se.MatrixToImageWriter.writeToStream(bitMatrix, "PNG", pngOutputStream);
@@ -412,5 +450,41 @@ public class Invoice implements VeriFactuInvoice {
 
     public void setWithoutRecipientIdentification(boolean withoutRecipientIdentification) {
         this.withoutRecipientIdentification = withoutRecipientIdentification;
+    }
+
+    @Override
+    public boolean isSubsanation() {
+        return subsanation;
+    }
+
+    public void setSubsanation(boolean subsanation) {
+        this.subsanation = subsanation;
+    }
+
+    @Override
+    public String getPreviousRejection() {
+        return previousRejection;
+    }
+
+    public void setPreviousRejection(String previousRejection) {
+        this.previousRejection = previousRejection;
+    }
+
+    @Override
+    public boolean isQualifiedSimplified() {
+        return qualifiedSimplified;
+    }
+
+    public void setQualifiedSimplified(boolean qualifiedSimplified) {
+        this.qualifiedSimplified = qualifiedSimplified;
+    }
+
+    @Override
+    public boolean isCoupon() {
+        return coupon;
+    }
+
+    public void setCoupon(boolean coupon) {
+        this.coupon = coupon;
     }
 }

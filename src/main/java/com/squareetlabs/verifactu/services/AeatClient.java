@@ -269,6 +269,30 @@ public class AeatClient {
                 }
             }
 
+            // Correction of a previously generated / rejected record (Subsanacion / RechazoPrevio)
+            if (invoice.isSubsanation()) {
+                registroAlta.setSubsanacion(SubsanacionType.S);
+            }
+            String previousRejection = invoice.getPreviousRejection();
+            if (previousRejection != null && !previousRejection.trim().isEmpty()) {
+                registroAlta.setRechazoPrevio(RechazoPrevioType.fromValue(previousRejection.trim()));
+            }
+
+            // Qualified simplified invoice (art. 7.2 and 7.3 RD 1619/2012)
+            if (invoice.isQualifiedSimplified()) {
+                registroAlta.setFacturaSimplificadaArt7273(SimplificadaCualificadaType.S);
+            }
+
+            // Coupons / bonuses / discounts with only the original issued (Cupon = S)
+            if (invoice.isCoupon()) {
+                registroAlta.setCupon(CuponType.S);
+            }
+
+            // Macrodato is mandatory when |ImporteTotal| >= 100,000,000.00
+            if (Math.abs(invoice.getTotalAmount()) >= 100_000_000d) {
+                registroAlta.setMacrodato(MacrodatoType.S);
+            }
+
             // Wrap in RegistroFactura
             RegistroFacturaType registroFactura = new RegistroFacturaType();
             registroFactura.setRegistroAlta(registroAlta);
@@ -437,7 +461,7 @@ public class AeatClient {
     private static boolean isBaseOnly(VeriFactuBreakdown b) {
         String qualification = b.getCalificacionOperacion();
         return b.getOperacionExenta() != null
-                || (qualification != null && (qualification.startsWith("N") || "S2".equals(qualification)));
+                || (qualification != null && qualification.startsWith("N"));
     }
 
     /**
@@ -502,11 +526,19 @@ public class AeatClient {
 
                 detalle.setBaseImponibleOimporteNoSujeto(formatAmount(b.getBaseAmount()));
 
-                // Exempt (E1-E6), not subject (N1, N2) and reverse-charge (S2) operations carry
-                // only the base: the AEAT rejects TipoImpositivo / CuotaRepercutida for them.
-                if (!isBaseOnly(b)) {
+                // Exempt (E1-E8) and not subject (N1, N2) operations carry only the base: the AEAT
+                // rejects TipoImpositivo / CuotaRepercutida for them. Reverse charge (S2) is the
+                // opposite: TipoImpositivo and CuotaRepercutida are mandatory and must be 0.
+                if ("S2".equals(b.getCalificacionOperacion())) {
+                    detalle.setTipoImpositivo(formatAmount(0));
+                    detalle.setCuotaRepercutida(formatAmount(0));
+                } else if (!isBaseOnly(b)) {
                     detalle.setCuotaRepercutida(formatAmount(b.getTaxAmount()));
                     detalle.setTipoImpositivo(formatAmount(b.getTaxRate()));
+                }
+
+                if (b.getTax() != null && !b.getTax().trim().isEmpty()) {
+                    detalle.setImpuesto(b.getTax().trim());
                 }
 
                 if (b.getClaveRegimen() != null) {

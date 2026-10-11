@@ -91,13 +91,26 @@ Si autenticas con un **certificado de sello** (sello electrónico / sello de ent
 
 > Hasta la versión 1.3.0 el parámetro `production` no seleccionaba el endpoint y todos los envíos reales iban al de producción. Se corrige en 1.3.1.
 
+## Alcance y limitaciones
+
+El SDK cubre la **remisión voluntaria VERI\*FACTU** (altas, anulaciones, subsanaciones y reenvíos tras rechazo) y la generación local del registro firmado en modo **NO VERI\*FACTU**. Todavía no cubre:
+- La **remisión bajo requerimiento** de la AEAT (bloque `RemisionRequerimiento` de la cabecera, `RefRequerimiento`, `FinRequerimiento`).
+- Los datos opcionales de cabecera `RemisionVoluntaria` (`FechaFinVeriFactu`, `Incidencia`).
+- El servicio de **consulta** de registros presentados, los registros de **evento** y los acuerdos de facturación (`NumRegistroAcuerdoFacturacion`, `IdAcuerdoSistemaInformatico`).
+- Identificar con `IDOtro` al tercero emisor, al generador de una anulación o al productor del sistema informático (solo se admite NIF).
+
 ## Novedades
 
-**1.4.0**
-- `InvoiceValidator` es ahora un validador completo (facturas, anulaciones y configuración, con errores y avisos) y `AeatClient` lo ejecuta antes de enviar. Ya no rechaza importes negativos, que son legales en las rectificativas por diferencias.
+**1.4.0** — El SDK aplica las reglas oficiales de la AEAT ([Validaciones y errores](https://www.agenciatributaria.es/AEAT.desarrolladores/Desarrolladores/_menu_/Documentacion/Sistemas_Informaticos_de_Facturacion_y_Sistemas_VERI_FACTU/Validaciones_y_errores/Validaciones_y_errores.html) v1.2.2, especificación de remisión v1.0.3, huella v0.1.2 y QR v0.5.0).
+- `InvoiceValidator` es un validador completo (facturas, anulaciones y configuración, con errores y avisos) y `AeatClient` lo ejecuta antes de enviar. Los importes negativos ya no se rechazan: son legales en las rectificativas por diferencias.
+- Destinatarios: obligatorios en F1, F3 y R1-R4, y no admitidos en F2 y R5. Destinatarios extranjeros con `IDOtro` (país y tipo de documento) y validación de la estructura del NIF-IVA.
+- Factura sin identificar al destinatario (art. 6.1.d): `setWithoutRecipientIdentification(true)`, **solo en F2 y R5**.
 - Rectificativas: `setRectifiedInvoices` (`FacturasRectificadas`) y, para F3, `setSubstitutedInvoices` (`FacturasSustituidas`).
-- Destinatarios extranjeros con `IDOtro` (país y tipo de documento) y facturas sin identificación del destinatario (`setWithoutRecipientIdentification`).
-- `Invoice#getOperationDescription` devuelve el valor tal cual (antes devolvía `"Invoice issued"` si no estaba informado); el cliente usa `Factura <número>` por defecto.
+- Reenvío tras un rechazo y subsanaciones: `setSubsanation` y `setPreviousRejection` (`Subsanacion` / `RechazoPrevio`).
+- `FacturaSimplificadaArt7273` (`setQualifiedSimplified`), `Cupon` (`setCoupon`, solo R1 y R5), `Macrodato` (automático con importe ≥ 100.000.000 €) e `Impuesto` por línea (`Breakdown#setTax`: IVA, IPSI, IGIC u otros).
+- Inversión del sujeto pasivo (S2): se envían `TipoImpositivo = 0` y `CuotaRepercutida = 0`, que la AEAT exige.
+- QR: host de producción correcto, servicio `ValidarQRNoVerifactu` para sistemas no verificables y corrección de errores nivel M.
+- `Invoice#getOperationDescription` devuelve el valor tal cual (antes devolvía `"Invoice issued"` si no estaba informado).
 
 **1.3.3** — Formatos enviados a la AEAT: `FechaHoraHusoGenRegistro` en ISO 8601 sin fracción de segundo (igual en el XML y en la huella), importes con dos decimales y nunca `-0.00`, operaciones exentas, no sujetas y de inversión del sujeto pasivo solo con la base, descripción de la operación tomada de la factura y URL del QR con los parámetros codificados. Un código de calificación o de exención desconocido falla con un mensaje claro.
 
@@ -188,7 +201,7 @@ En **ambos modos** el hash se calcula y encadena exactamente igual (misma huella
 |---|---|---|
 | `InvoiceType.F1` | F1 | Factura estándar |
 | `InvoiceType.F2` | F2 | Factura simplificada |
-| `InvoiceType.F3` | F3 | Factura emitida en sustitución de facturas simplificadas (hay que indicar cuáles con `setSubstitutedInvoices`) |
+| `InvoiceType.F3` | F3 | Factura emitida en sustitución de facturas simplificadas (se indican cuáles con `setSubstitutedInvoices`, opcional) |
 | `InvoiceType.F4` | F4 | Asiento resumen de facturas. **No admitido**: el esquema de la AEAT que usa el SDK no lo incluye; `InvoiceValidator` lo rechaza |
 | `InvoiceType.R1` | R1 | Rectificativa (art. 80.1, 80.2, 80.6 LIVA) |
 | `InvoiceType.R2` | R2 | Rectificativa (art. 80.3 LIVA) |
@@ -200,7 +213,7 @@ Ejemplos de construcción de cada tipo (incluyendo rectificativas por sustituci�
 
 ### Facturas rectificativas (R1-R5)
 
-Una rectificativa necesita el tipo de rectificación (`setCorrectionType("S")` por sustitución, `"I"` por diferencias) y debe indicar qué factura corrige con `setRectifiedInvoices` (`FacturasRectificadas`):
+Una rectificativa necesita el tipo de rectificación (`setCorrectionType("S")` por sustitución, `"I"` por diferencias) e indica qué factura corrige con `setRectifiedInvoices` (`FacturasRectificadas`; es opcional para la AEAT, pero es lo que identifica la factura rectificada salvo en los rappels y casos autorizados):
 
 ```java
 invoice.setInvoiceType(InvoiceType.R1);
@@ -229,7 +242,28 @@ new Recipient("John Smith", "P1234567", "GB", "03");        // 03 pasaporte
 | `06` | Otro documento probatorio |
 | `07` | No censado |
 
-Una factura completa (F1, F3, R1-R4) normalmente identifica al destinatario. Si no se identifica (art. 6.1.d RD 1619/2012), márcala con `invoice.setWithoutRecipientIdentification(true)` y deja los destinatarios vacíos; el SDK envía `FacturaSinIdentifDestinatarioArt61d = S`.
+La AEAT **rechaza** una F1, F3 o R1-R4 sin destinatarios (hace falta al menos uno) y una F2 o R5 con ellos. Si el destinatario no se puede identificar, emite una factura simplificada (F2); si es una factura del art. 6.1.d RD 1619/2012 (sin identificación del destinatario), márcala con `invoice.setWithoutRecipientIdentification(true)` — la AEAT solo admite esa marca en **F2 y R5**, que no llevan destinatarios — y deja de aplicarse el límite de 3.000 € de las simplificadas. Una factura simplificada cualificada (art. 7.2 y 7.3, `FacturaSimplificadaArt7273`) se marca con `setQualifiedSimplified(true)` y solo vale en F1, F3 y R1-R4.
+
+Reglas de `IDOtro` de la AEAT: con país `ES` solo valen los tipos 03 y 07; el tipo 07 (no censado) exige país `ES` y se acepta con errores; el tipo 02 (NIF-IVA) no necesita país, debe tener la estructura de un Estado miembro (por ejemplo `FR12345678901`) y solo vale en F1, F3 y R1-R4.
+
+### Reenvío tras un rechazo y subsanaciones
+
+Un registro rechazado por la AEAT no existe en su sistema. Si lo corriges y lo vuelves a enviar sin que haga falta una rectificativa, es un **alta por rechazo**: `Subsanacion = S` y `RechazoPrevio = X`.
+
+```java
+invoice.setSubsanation(true);
+invoice.setPreviousRejection("X");
+```
+
+| Operación | `setSubsanation` | `setPreviousRejection` |
+|---|---|---|
+| Alta normal | no | no (o `"N"`) |
+| Alta por rechazo (el alta anterior fue rechazada) | `true` | `"X"` |
+| Alta de subsanación (el registro ya existe en la AEAT) | `true` | no (o `"N"`) |
+| Alta por rechazo de una subsanación | `true` | `"S"` |
+| Subsanación sin registro previo (no se remitió en su día) | `true` | `"X"` |
+
+Para anulaciones: `Annulment#setRetryAfterRejection(true)` (`RechazoPrevio = S`) y `setNotRegisteredAtAeat(true)` (`SinRegistroPrevio = S`).
 
 ## Anulación de un registro de facturación
 
@@ -296,7 +330,11 @@ result.getWarnings();
 
 `AeatClient.sendInvoice` y `sendAnnulment` ejecutan esta validación antes de firmar y enviar: un registro con errores **no sale**, y la respuesta trae `status=error`, un `message` (`Validacion local: ...`) y la lista en `validation_errors`.
 
-Comprueba, entre otros: campos obligatorios y longitudes del esquema de la AEAT, NIF/CIF/NIE (formato y dígito de control; los NIF especiales K, L y M se aceptan por formato), fecha no futura, tipo de factura admitido, desglose (1 a 12 líneas, códigos de calificación, exención y régimen, base + cuotas + recargos = total), rectificativas (tipo de rectificación e importes corregidos), facturas rectificadas y sustituidas, destinatarios nacionales y extranjeros, y la configuración del sistema informático. Los importes negativos son legales (rectificativas por diferencias): no son un error por sí mismos.
+Aplica las validaciones de negocio publicadas por la AEAT. Entre otras:
+- **Rechazan el registro (error):** campos obligatorios y longitudes del esquema; NIF/CIF/NIE con dígito de control (los NIF especiales K, L y M se aceptan por formato); fecha de expedición no futura y no anterior al 28/10/2024; número de factura con solo caracteres ASCII imprimibles y sin `" ' < > =`; tipo de factura admitido (F4 no); destinatarios según el tipo; desglose de 1 a 12 líneas con calificación u exención, clave de régimen obligatoria y de la lista que corresponde al impuesto (L8A para IVA, L8B más 20 y 21 para IGIC, 01/08/11/18/19/20 para IPSI) y sus reglas (02, 03, 04, 06, 07, 08, 10, 11 y 14); tipos de IVA admitidos (0, 4, 10, 21 y los temporales 5, 2 y 7,5 según la fecha); cuota repercutida = base × tipo con un margen de 10 € y mismo signo; tipos de recargo de equivalencia; inversión del sujeto pasivo (S2) solo con F1, F3 y R1-R4; límite de 3.000 € en F2; rectificativas (tipo de rectificación obligatorio solo en R1-R5, importes corregidos por sustitución); facturas rectificadas solo en R1-R5 y sustituidas solo en F3; reglas de `IDOtro` y NIF-IVA; fechas de operación; tercero y destinatario emisor.
+- **La AEAT acepta con errores (aviso):** el importe total y la cuota total no cuadran con el desglose más de 10 € (no se comprueba con las claves de régimen 03, 05, 06, 08 y 09); huella anterior en minúsculas; NIF destinatario informado como no censado (07); rectificativa sin factura rectificada indicada.
+
+Los importes negativos son legales (rectificativas por diferencias): no son un error por sí mismos.
 
 ### Validación de NIF/CIF/NIE
 
@@ -314,9 +352,13 @@ Ejemplo completo: [`ValidationExample.java`](src/test/java/com/squareetlabs/veri
 No existe una clase `QrHelper` independiente: los métodos viven directamente en `Invoice`.
 
 ```java
-String url = invoice.getValidationUrl(false);       // false = pruebas, true = producción
-byte[] qrPng = invoice.getValidationQR(false, 300);  // PNG de 300x300 px
+String url = invoice.getValidationUrl(false);          // false = pruebas, true = producción (sistema VERI*FACTU)
+String urlNoVf = invoice.getValidationUrl(false, false); // sistema que emite facturas no verificables
+byte[] qrPng = invoice.getValidationQR(false, 300);     // PNG de 300x300 px
+byte[] qrNoVf = invoice.getValidationQR(false, false, 300);
 ```
+
+La URL sigue la especificación de la AEAT: servicio `ValidarQR` (VERI\*FACTU) o `ValidarQRNoVerifactu` (no verificable), host `prewww2.aeat.es` en pruebas y `www2.agenciatributaria.gob.es` en producción, y los cuatro parámetros (`nif`, `numserie`, `fecha`, `importe`) codificados en UTF-8. El QR se genera con corrección de errores nivel **M**; la factura debe imprimirlo entre 30x30 y 40x40 mm, con el texto «QR tributario:» encima y, en sistemas VERI\*FACTU, la frase «Factura verificable en la sede electrónica de la AEAT» o «VERI\*FACTU» debajo.
 
 Ejemplo completo: [`QrCodeExample.java`](src/test/java/com/squareetlabs/verifactu/examples/QrCodeExample.java)
 
