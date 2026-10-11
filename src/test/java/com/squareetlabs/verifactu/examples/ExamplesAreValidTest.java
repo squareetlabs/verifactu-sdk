@@ -39,6 +39,7 @@ public class ExamplesAreValidTest {
         examples.put("resentAfterRejection", InvoiceTypesExample.resentAfterRejection());
         examples.put("rectificativeBySubstitution", InvoiceTypesExample.rectificativeBySubstitution());
         examples.put("rectificativeByDifference", InvoiceTypesExample.rectificativeByDifference());
+        examples.put("fixedGenerationTimestamp", IdempotentResendExample.standardWithFixedTimestamp(IdempotentResendExample.generatedOnce()));
         return examples;
     }
 

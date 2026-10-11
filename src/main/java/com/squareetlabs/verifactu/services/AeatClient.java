@@ -86,7 +86,7 @@ public class AeatClient {
             // FechaHoraHusoGenRegistro must be ISO 8601 without fractional seconds
             // (YYYY-MM-DDThh:mm:ss+hh:mm) both in the XML and in the hash input, and both
             // must carry exactly the same value.
-            ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
+            ZonedDateTime now = generationInstant(invoice.getGenerationTimestamp());
             String tsString = now.format(AEAT_TIMESTAMP_FORMAT);
             XMLGregorianCalendar tsXml = DatatypeFactory.newInstance().newXMLGregorianCalendar(tsString);
 
@@ -348,7 +348,7 @@ public class AeatClient {
             String numSerie = annulment.getInvoiceNumber();
             String fechaExp = annulment.getIssueDate().format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
 
-            ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
+            ZonedDateTime now = generationInstant(annulment.getGenerationTimestamp());
             String tsString = now.format(AEAT_TIMESTAMP_FORMAT);
             XMLGregorianCalendar tsXml = DatatypeFactory.newInstance().newXMLGregorianCalendar(tsString);
 
@@ -984,5 +984,14 @@ public class AeatClient {
      */
     private boolean isCorrectiveInvoice(String tipoFactura) {
         return Arrays.asList("R1", "R2", "R3", "R4", "R5").contains(tipoFactura);
+    }
+
+    /**
+     * Generation instant of a record: the one supplied by the caller (so a resend reproduces the same
+     * record) or, when absent, the current instant. Always expressed in Europe/Madrid.
+     */
+    private static ZonedDateTime generationInstant(ZonedDateTime supplied) {
+        ZoneId madrid = ZoneId.of("Europe/Madrid");
+        return supplied != null ? supplied.withZoneSameInstant(madrid) : ZonedDateTime.now(madrid);
     }
 }

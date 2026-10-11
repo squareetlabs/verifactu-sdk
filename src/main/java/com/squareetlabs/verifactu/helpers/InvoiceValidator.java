@@ -140,6 +140,14 @@ public class InvoiceValidator {
                 config != null ? config.getIssuerName() : null, true, today);
     }
 
+    /** AEAT: generation instant later than the system date (with a margin) is accepted with errors. */
+    private static void checkGenerationTimestamp(Findings f, java.time.ZonedDateTime generated) {
+        if (generated != null && generated.isAfter(java.time.ZonedDateTime.now(MADRID).plusMinutes(5))) {
+            f.warning("La fecha y hora de generación del registro es posterior a la fecha del sistema: "
+                    + generated + " (la AEAT acepta el registro con errores)");
+        }
+    }
+
     private static ValidationResult validateInvoice(VeriFactuInvoice invoice, String issuerTaxId,
             String issuerName, boolean issuerNameRequired, LocalDate today) {
         Findings f = new Findings();
@@ -156,6 +164,8 @@ public class InvoiceValidator {
             f.error("La fecha de emisión no puede ser anterior al 28/10/2024 (entrada en vigor de la "
                     + "orden ministerial de VERI*FACTU): " + issueDate);
         }
+
+        checkGenerationTimestamp(f, invoice.getGenerationTimestamp());
 
         String type = invoice.getInvoiceType();
         if (isBlank(type)) {
@@ -820,6 +830,7 @@ public class InvoiceValidator {
             f.error("NIF emisor inválido: " + issuerTaxId);
         }
 
+        checkGenerationTimestamp(f, annulment.getGenerationTimestamp());
         checkPreviousHash(f, annulment.getPreviousHash());
         if (annulment.getExternalReference() != null && annulment.getExternalReference().length() > 60) {
             f.error("La referencia externa no puede superar 60 caracteres");

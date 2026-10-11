@@ -29,7 +29,7 @@ Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu 
 <dependency>
     <groupId>com.squareetlabs</groupId>
     <artifactId>verifactu</artifactId>
-    <version>1.4.0</version>
+    <version>1.4.1</version>
 </dependency>
 ```
 
@@ -100,6 +100,8 @@ El SDK cubre la **remisión voluntaria VERI\*FACTU** (altas, anulaciones, subsan
 - Identificar con `IDOtro` al tercero emisor, al generador de una anulación o al productor del sistema informático (solo se admite NIF).
 
 ## Novedades
+
+**1.4.1** — Fecha de generación del registro fijada por quien llama, para reenviar sin riesgo. `Invoice#setGenerationTimestamp` y `Annulment#setGenerationTimestamp` (`ZonedDateTime`, opcional) fijan `FechaHoraHusoGenRegistro`; sin valor, el cliente usa el instante actual como hasta ahora. Un reenvío con el mismo valor reproduce el mismo XML y la misma huella. El validador avisa si la fecha es posterior a la del sistema (la AEAT acepta el registro con errores). Los interfaces `VeriFactuInvoice` y `VeriFactuAnnulment` incorporan `getGenerationTimestamp()` como `default`.
 
 **1.4.0** — El SDK aplica las reglas oficiales de la AEAT ([Validaciones y errores](https://www.agenciatributaria.es/AEAT.desarrolladores/Desarrolladores/_menu_/Documentacion/Sistemas_Informaticos_de_Facturacion_y_Sistemas_VERI_FACTU/Validaciones_y_errores/Validaciones_y_errores.html) v1.2.2, especificación de remisión v1.0.3, huella v0.1.2 y QR v0.5.0).
 - `InvoiceValidator` es un validador completo (facturas, anulaciones y configuración, con errores y avisos) y `AeatClient` lo ejecuta antes de enviar. Los importes negativos ya no se rechazan: son legales en las rectificativas por diferencias.
@@ -245,6 +247,18 @@ new Recipient("John Smith", "P1234567", "GB", "03");        // 03 pasaporte
 La AEAT **rechaza** una F1, F3 o R1-R4 sin destinatarios (hace falta al menos uno) y una F2 o R5 con ellos. Si el destinatario no se puede identificar, emite una factura simplificada (F2); si es una factura del art. 6.1.d RD 1619/2012 (sin identificación del destinatario), márcala con `invoice.setWithoutRecipientIdentification(true)` — la AEAT solo admite esa marca en **F2 y R5**, que no llevan destinatarios — y deja de aplicarse el límite de 3.000 € de las simplificadas. Una factura simplificada cualificada (art. 7.2 y 7.3, `FacturaSimplificadaArt7273`) se marca con `setQualifiedSimplified(true)` y solo vale en F1, F3 y R1-R4.
 
 Reglas de `IDOtro` de la AEAT: con país `ES` solo valen los tipos 03 y 07; el tipo 07 (no censado) exige país `ES` y se acepta con errores; el tipo 02 (NIF-IVA) no necesita país, debe tener la estructura de un Estado miembro (por ejemplo `FR12345678901`) y solo vale en F1, F3 y R1-R4.
+
+### Reenvío idempotente: fijar la fecha de generación
+
+Si un envío falla por comunicación no sabes si la AEAT llegó a registrar el alta. La huella se calcula sobre `FechaHoraHusoGenRegistro`, así que, si el reintento la calcula de nuevo, el registro cambia. Para que sea el mismo:
+
+```java
+ZonedDateTime generatedAt = ZonedDateTime.now(ZoneId.of("Europe/Madrid")); // guárdalo antes del primer envío
+invoice.setGenerationTimestamp(generatedAt);      // Annulment tiene el mismo método
+client.sendInvoice(invoice, previous);            // reintento: mismo valor, misma huella
+```
+
+El valor se expresa en Europe/Madrid y se descartan las fracciones de segundo. Ver [`IdempotentResendExample`](src/test/java/com/squareetlabs/verifactu/examples/IdempotentResendExample.java).
 
 ### Reenvío tras un rechazo y subsanaciones
 
