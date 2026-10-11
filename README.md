@@ -91,6 +91,21 @@ Si autenticas con un **certificado de sello** (sello electrónico / sello de ent
 
 > Hasta la versión 1.3.0 el parámetro `production` no seleccionaba el endpoint y todos los envíos reales iban al de producción. Se corrige en 1.3.1.
 
+## Detalle de la respuesta de la AEAT
+
+Desde la versión 1.3.2, `sendInvoice` y `sendAnnulment` añaden al mapa de respuesta el detalle por registro que devuelve la AEAT (las claves existentes no cambian). Siempre están presentes, con `null`, lista vacía o cadena vacía si no hay dato:
+
+| Clave | Contenido |
+|---|---|
+| `aeat_error_code` / `aeat_error_message` | Código y descripción de error del primer registro que lo tenga |
+| `aeat_record_status` | Estado del primer registro (`Correcto`, `AceptadoConErrores`, `Incorrecto`) |
+| `aeat_record_errors` | Lista con el detalle de cada registro (estado, código, descripción, operación, identificador de factura y registro duplicado) |
+| `aeat_submission_wait` | Tiempo de espera entre envíos indicado por la AEAT |
+| `aeat_presenter_nif` | NIF del presentador |
+| `aeat_message` | Resumen en una línea, `Codigo[<código>].<descripción>` |
+
+En modo NO VERI*FACTU las claves existen pero vacías, porque no hay respuesta de la AEAT.
+
 ## Uso rápido: crear y enviar una factura
 
 ```java
