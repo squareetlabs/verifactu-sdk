@@ -196,7 +196,7 @@ public class InvoiceValidator {
         LocalDate reference = invoice.getOperationDate() != null ? invoice.getOperationDate() : issueDate;
         Set<String> regimes = regimesOf(invoice);
 
-        checkBreakdowns(f, invoice, type, reference, regimes);
+        checkBreakdowns(f, invoice, type, reference, regimes, today);
         checkCorrection(f, invoice, type, corrective);
         checkRecipients(f, invoice, type, regimes, reference);
         checkDates(f, invoice, issueDate, today, regimes);
@@ -226,7 +226,7 @@ public class InvoiceValidator {
     }
 
     private static void checkBreakdowns(Findings f, VeriFactuInvoice invoice, String type, LocalDate reference,
-            Set<String> regimes) {
+            Set<String> regimes, LocalDate today) {
         List<VeriFactuBreakdown> lines = invoice.getBreakdowns();
         if (lines == null || lines.isEmpty()) {
             f.error("Desglose obligatorio: la factura necesita al menos una línea de desglose");
@@ -281,8 +281,7 @@ public class InvoiceValidator {
                 if (iva || "03".equals(taxCode)) {
                     f.error(label + "ClaveRegimen obligatoria");
                 } else if ("02".equals(taxCode)) {
-                    f.warning(label + "ClaveRegimen obligatoria para IPSI: la AEAT acepta el registro con "
-                            + "errores hasta el 31/12/2026 y lo rechaza desde el 01/01/2027");
+                    ipsiRegime(f, today, label + "ClaveRegimen obligatoria para IPSI");
                 }
             } else if ("05".equals(taxCode)) {
                 f.error(label + "ClaveRegimen solo puede informarse con Impuesto 01, 02 o 03");
@@ -291,9 +290,8 @@ public class InvoiceValidator {
             } else if ("03".equals(taxCode) && !REGIMES_IGIC.contains(regime)) {
                 f.error(label + "ClaveRegimen no válida para IGIC (lista L8B): " + regime);
             } else if ("02".equals(taxCode) && !REGIMES_IPSI.contains(regime)) {
-                f.warning(label + "ClaveRegimen no válida para IPSI (admitidas 01, 08, 11, 18, 19 y 20): "
-                        + regime + "; la AEAT acepta el registro con errores hasta el 31/12/2026 y lo rechaza "
-                        + "desde el 01/01/2027");
+                ipsiRegime(f, today, label + "ClaveRegimen no válida para IPSI (admitidas 01, 08, 11, 18, 19 y 20): "
+                        + regime);
             }
 
             boolean baseOnly = hasExemption || (hasQualification && qualification.startsWith("N"));
@@ -322,7 +320,14 @@ public class InvoiceValidator {
                 f.error(label + "BaseImponibleACoste solo puede informarse con ClaveRegimen 06");
             }
             if (ivaOrIgic) {
-                checkRegime(f, label, b, regime, type, hasExemption, qualification, exemption);
+                checkRegime(f, label, b, regime, type, hasExemption, qualification, exemption, iva);
+            }
+
+            if (b.getCuotaRecargoEquivalencia() != null) {
+                checkAmount(f, label + "CuotaRecargoEquivalencia", b.getCuotaRecargoEquivalencia());
+            }
+            if (b.getBaseImponibleACoste() != null) {
+                checkAmount(f, label + "BaseImponibleACoste", b.getBaseImponibleACoste());
             }
 
             tax += s1 ? b.getTaxAmount() : 0;
@@ -434,9 +439,24 @@ public class InvoiceValidator {
         }
     }
 
+    private static final LocalDate IPSI_REGIME_ENFORCED_FROM = LocalDate.of(2027, 1, 1);
+
+    /**
+     * AEAT: hasta el 31/12/2026 un fallo de ClaveRegimen con IPSI se acepta con errores; desde el 01/01/2027 se
+     * rechaza el registro (validaciones y errores v1.2.2, 4.3.1 y 15.6).
+     */
+    private static void ipsiRegime(Findings f, LocalDate today, String message) {
+        if (today.isBefore(IPSI_REGIME_ENFORCED_FROM)) {
+            f.warning(message + ": la AEAT acepta el registro con errores hasta el 31/12/2026 y lo rechaza desde el "
+                    + "01/01/2027");
+        } else {
+            f.error(message + " (desde el 01/01/2027 la AEAT rechaza el registro)");
+        }
+    }
+
     /** Rules that depend on the {@code ClaveRegimen} (IVA and IGIC). */
     private static void checkRegime(Findings f, String label, VeriFactuBreakdown b, String regime, String type,
-            boolean exempt, String qualification, String exemption) {
+            boolean exempt, String qualification, String exemption, boolean iva) {
         if (isBlank(regime)) {
             return;
         }
@@ -493,8 +513,15 @@ public class InvoiceValidator {
                 }
                 break;
             case "11":
-                if (s1 && b.getTaxRate() != 21) {
+                // La regla del 21 % es del IVA (15.6.8): con IGIC la clave 11 admite sus tipos.
+                if (iva && s1 && b.getTaxRate() != 21) {
                     f.error(label + "ClaveRegimen 11 (arrendamiento de local) solo admite el tipo impositivo 21");
+                }
+                break;
+            case "20":
+                // Solo existe para IGIC (L8B): exige CalificacionOperacion N2 siempre informada (15.6.10).
+                if (!iva && !"N2".equals(qualification)) {
+                    f.error(label + "ClaveRegimen 20 (IGIC) exige CalificacionOperacion N2");
                 }
                 break;
             case "14":
@@ -535,6 +562,12 @@ public class InvoiceValidator {
             } else if ("S".equals(correctionType)
                     && (invoice.getCorrectedBaseAmount() == null || invoice.getCorrectedTaxAmount() == null)) {
                 f.error("La rectificativa por sustitución necesita correctedBaseAmount y correctedTaxAmount");
+            }
+            if (invoice.getCorrectedBaseAmount() != null) {
+                checkAmount(f, "correctedBaseAmount", invoice.getCorrectedBaseAmount());
+            }
+            if (invoice.getCorrectedTaxAmount() != null) {
+                checkAmount(f, "correctedTaxAmount", invoice.getCorrectedTaxAmount());
             }
             if (!hasRectified) {
                 f.warning("Una rectificativa debería indicar la factura que rectifica (getRectifiedInvoices); "

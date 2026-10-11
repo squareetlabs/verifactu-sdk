@@ -74,7 +74,7 @@ public class AeatXsdValidationTest {
         URL cert = getClass().getClassLoader().getResource("test-cert.p12");
         assertNotNull(cert);
         return new AeatClient(cert.getPath(), "testpass123",
-                new VeriFactuConfig("Empresa Test SL", "B72877814"), false, false);
+                com.squareetlabs.verifactu.TestConfig.of("Empresa Test SL", "B72877814"), false, false);
     }
 
     // ─── Utilidades de extraccion del XML generado ─────────────────
@@ -254,7 +254,7 @@ public class AeatXsdValidationTest {
 
     @Test
     public void specialCharactersInNames() {
-        VeriFactuConfig config = new VeriFactuConfig("Hijos & \"Cia\" <S.L.> Ñandú Ç", "B72877814");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Hijos & \"Cia\" <S.L.> Ñandú Ç", "B72877814");
         AeatClient client = new AeatClient(getClass().getClassLoader().getResource("test-cert.p12").getPath(),
                 "testpass123", config, false, false);
         check("Caracteres especiales", client.sendInvoice(invoice("FCT2600008", InvoiceType.F1, 4.2, 24.2, line(21, 20, 4.2)), null), true);

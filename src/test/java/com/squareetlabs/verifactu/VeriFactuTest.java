@@ -47,7 +47,7 @@ public class VeriFactuTest {
 
     @Test
     public void testClientProcess() {
-        VeriFactuConfig config = new VeriFactuConfig("Test Company", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Test Company", "B12345678");
         AeatClient client = new AeatClient("/path/to/cert", "pass", config, false, true);
 
         Invoice invoice = new Invoice();

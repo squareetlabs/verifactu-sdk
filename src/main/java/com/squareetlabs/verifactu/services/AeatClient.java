@@ -55,7 +55,7 @@ public class AeatClient {
     private final boolean production;
     private final boolean verifactuMode;
     // Cache the service to avoid reloading WSDL every time
-    private static SfVerifactu service;
+    private static volatile SfVerifactu service;
 
     public AeatClient(String certPath, String certPassword, VeriFactuConfig config, boolean production,
             boolean verifactuMode) {
@@ -68,9 +68,17 @@ public class AeatClient {
 
     public Map<String, Object> sendInvoice(VeriFactuInvoice invoice, Map<String, Object> previous) {
         try {
+            InvoiceValidator.ValidationResult configuration = InvoiceValidator.validate(config);
+            if (!configuration.isValid()) {
+                return validationFailure(configuration);
+            }
             InvoiceValidator.ValidationResult validation = InvoiceValidator.validate(invoice, config);
             if (!validation.isValid()) {
                 return validationFailure(validation);
+            }
+            String chainingError = chainingError(previous, invoice.getPreviousHash());
+            if (chainingError != null) {
+                return chainingFailure(chainingError);
             }
 
             // 1. Prepare common data
@@ -339,9 +347,17 @@ public class AeatClient {
      */
     public Map<String, Object> sendAnnulment(VeriFactuAnnulment annulment, Map<String, Object> previous) {
         try {
+            InvoiceValidator.ValidationResult configuration = InvoiceValidator.validate(config);
+            if (!configuration.isValid()) {
+                return validationFailure(configuration);
+            }
             InvoiceValidator.ValidationResult validation = InvoiceValidator.validate(annulment, config);
             if (!validation.isValid()) {
                 return validationFailure(validation);
+            }
+            String chainingError = chainingError(previous, annulment.getPreviousHash());
+            if (chainingError != null) {
+                return chainingFailure(chainingError);
             }
 
             String issuerVat = config.getIssuerVat() != null ? config.getIssuerVat() : "";
@@ -604,6 +620,37 @@ public class AeatClient {
         return response;
     }
 
+    /**
+     * The chaining block needs the previous record's number, date and hash. {@code previous} is the response of
+     * the previous accepted record; a bare {@code previousHash} cannot be chained because the XML needs the
+     * previous number and date too (and the hash would no longer match the one the AEAT computes).
+     */
+    private static String chainingError(Map<String, Object> previous, String previousHash) {
+        boolean hasPrevious = previous != null && !previous.isEmpty();
+        if (!hasPrevious) {
+            return previousHash != null && !previousHash.trim().isEmpty()
+                    ? "previousHash sin el registro anterior: pasa en 'previous' el registro anterior (numero, fecha "
+                    + "y huella), o null si es el primero de la cadena"
+                    : null;
+        }
+        for (String key : new String[] {"hash", "number", "date"}) {
+            Object value = previous.get(key);
+            if (value == null || value.toString().trim().isEmpty()) {
+                return "El registro anterior ('previous') debe traer '" + key + "': pasa la respuesta completa de un "
+                        + "registro aceptado, no el de un envio fallido";
+            }
+        }
+        return null;
+    }
+
+    private static Map<String, Object> chainingFailure(String message) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "error");
+        response.put("message", "Encadenamiento: " + message);
+        response.put("validation_errors", new ArrayList<>(java.util.Collections.singletonList(message)));
+        return response;
+    }
+
     /** A recipient with an explicit identification type, or a non-Spanish country, uses IDOtro. */
     static boolean isForeignRecipient(VeriFactuRecipient recipient) {
         String country = recipient.getCountryCode();
@@ -639,7 +686,7 @@ public class AeatClient {
                 p.setNombreRazon(r.getName());
                 if (isForeignRecipient(r)) {
                     IDOtroType idOtro = new IDOtroType();
-                    if (r.getCountryCode() != null) {
+                    if (r.getCountryCode() != null && !r.getCountryCode().trim().isEmpty()) {
                         idOtro.setCodigoPais(CountryType2.fromValue(r.getCountryCode().trim().toUpperCase()));
                     }
                     idOtro.setIDType(r.getIdType());

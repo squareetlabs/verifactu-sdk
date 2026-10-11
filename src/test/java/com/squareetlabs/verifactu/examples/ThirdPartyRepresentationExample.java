@@ -31,7 +31,8 @@ public class ThirdPartyRepresentationExample {
      * certificado.
      */
     public static AeatClient representativeSubmission() {
-        VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678"); // el obligado tributario
+        VeriFactuConfig config = new VeriFactuConfig("Cliente S.L.", "B12345678");
+        config.setDeveloperNif("B72877814"); // NIF de tu sistema informatico (obligatorio) // el obligado tributario
         config.setRepresentativeName("Odei Software S.L."); // quien remite el fichero
         config.setRepresentativeVat("B87654321");
 
@@ -72,6 +73,7 @@ public class ThirdPartyRepresentationExample {
      */
     public static void multiTenantSaaS() {
         VeriFactuConfig config = new VeriFactuConfig("Odei Software S.L.", "B87654321");
+        config.setDeveloperNif("B72877814"); // NIF de tu sistema informatico (obligatorio)
 
         // Declara la capacidad ESTRUCTURAL del sistema UNA SOLA VEZ: este
         // SIF puede llevar la facturacion de varios obligados tributarios.

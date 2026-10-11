@@ -32,6 +32,7 @@ public class AnnulmentExample {
 
     public static void main(String[] args) {
         VeriFactuConfig config = new VeriFactuConfig("Mi Empresa S.L.", "B12345678");
+        config.setDeveloperNif("B72877814"); // NIF de tu sistema informatico (obligatorio)
         AeatClient client = new AeatClient("/ruta/al/certificado.p12", "password", config, false, true);
 
         // --- Factura previa de la cadena ---

@@ -31,6 +31,7 @@ public class BasicInvoiceExample {
         // Estos datos identifican a la empresa/autonomo que expide las
         // facturas y se usan para rellenar Cabecera.ObligadoEmision.
         VeriFactuConfig config = new VeriFactuConfig("Mi Empresa S.L.", "B12345678");
+        config.setDeveloperNif("B72877814"); // NIF de tu sistema informatico (obligatorio)
         config.setSystemName("MiSistemaFacturacion");
         config.setSystemId("01");
         config.setSystemVersion("1.0");

@@ -52,7 +52,7 @@ public class AeatClientLocalModeTest {
     }
 
     private AeatClient buildClient(boolean verifactuMode) {
-        VeriFactuConfig config = new VeriFactuConfig("Empresa Test SL", "B72877814");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Empresa Test SL", "B72877814");
         return new AeatClient(testCertPath(), TEST_CERT_PASSWORD, config, false, verifactuMode);
     }
 

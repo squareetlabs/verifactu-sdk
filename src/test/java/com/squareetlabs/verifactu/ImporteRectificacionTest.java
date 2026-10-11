@@ -39,7 +39,7 @@ public class ImporteRectificacionTest {
         invoice.setBreakdowns(Arrays.asList(breakdown));
 
         // Use reflection to access private method
-        VeriFactuConfig config = new VeriFactuConfig("Test Company", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Test Company", "B12345678");
         AeatClient client = new AeatClient("/tmp/test.pem", null, config, false, true);
 
         Method method = AeatClient.class.getDeclaredMethod("buildImporteRectificacion",
@@ -71,7 +71,7 @@ public class ImporteRectificacionTest {
         invoice.setCorrectedBaseAmount(null);
         invoice.setCorrectedTaxAmount(null);
 
-        VeriFactuConfig config = new VeriFactuConfig("Test Company", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Test Company", "B12345678");
         AeatClient client = new AeatClient("/tmp/test.pem", null, config, false, true);
 
         Method method = AeatClient.class.getDeclaredMethod("buildImporteRectificacion",
@@ -96,7 +96,7 @@ public class ImporteRectificacionTest {
         invoice.setCorrectedTaxAmount(21.00);
         invoice.setCorrectedSurchargeAmount(null);
 
-        VeriFactuConfig config = new VeriFactuConfig("Test Company", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Test Company", "B12345678");
         AeatClient client = new AeatClient("/tmp/test.pem", null, config, false, true);
 
         Method method = AeatClient.class.getDeclaredMethod("buildImporteRectificacion",
@@ -114,7 +114,7 @@ public class ImporteRectificacionTest {
 
     @Test
     public void testIdentifiesCorrectiveInvoiceTypes() throws Exception {
-        VeriFactuConfig config = new VeriFactuConfig("Test Company", "B12345678");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Test Company", "B12345678");
         AeatClient client = new AeatClient("/tmp/test.pem", null, config, false, true);
 
         Method method = AeatClient.class.getDeclaredMethod("isCorrectiveInvoice", String.class);

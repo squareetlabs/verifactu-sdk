@@ -22,7 +22,7 @@ public class InvoiceValidatorTest {
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 11);
 
     private static VeriFactuConfig config() {
-        VeriFactuConfig config = new VeriFactuConfig("Empresa Test SL", "B72877814");
+        VeriFactuConfig config = com.squareetlabs.verifactu.TestConfig.of("Empresa Test SL", "B72877814");
         config.setDeveloperNif("B72877814");
         return config;
     }
@@ -121,20 +121,20 @@ public class InvoiceValidatorTest {
 
     @Test
     public void invalidIssuerNif() {
-        VeriFactuConfig bad = new VeriFactuConfig("Empresa Test SL", "CIF0000");
+        VeriFactuConfig bad = com.squareetlabs.verifactu.TestConfig.of("Empresa Test SL", "CIF0000");
         ValidationResult result = InvoiceValidator.validate(invoice(), bad, TODAY);
         assertError(result, "NIF emisor inválido: CIF0000");
     }
 
     @Test
     public void specialSpanishNifsAreAccepted() {
-        VeriFactuConfig k = new VeriFactuConfig("Persona", "K1234567L");
+        VeriFactuConfig k = com.squareetlabs.verifactu.TestConfig.of("Persona", "K1234567L");
         assertTrue(InvoiceValidator.validate(invoice(), k, TODAY).isValid());
     }
 
     @Test
     public void issuerNameRequiredWhenValidatingWithConfig() {
-        VeriFactuConfig noName = new VeriFactuConfig(null, "B72877814");
+        VeriFactuConfig noName = com.squareetlabs.verifactu.TestConfig.of(null, "B72877814");
         assertError(InvoiceValidator.validate(invoice(), noName, TODAY), "Razón social del emisor obligatoria");
     }
 
@@ -425,7 +425,7 @@ public class InvoiceValidatorTest {
     public void configuration() {
         assertTrue(InvoiceValidator.validate(config()).getErrors().toString(), InvoiceValidator.validate(config()).isValid());
 
-        VeriFactuConfig bad = new VeriFactuConfig("", "CIF0000");
+        VeriFactuConfig bad = com.squareetlabs.verifactu.TestConfig.of("", "CIF0000");
         bad.setDeveloperNif("123");
         bad.setSystemId("ABC");
         bad.setSystemName(String.join("", Collections.nCopies(31, "N")));
