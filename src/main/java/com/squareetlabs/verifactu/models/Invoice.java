@@ -181,7 +181,7 @@ public class Invoice implements VeriFactuInvoice {
 
     @Override
     public String getOperationDescription() {
-        return operationDescription == null ? "Invoice issued" : operationDescription;
+        return operationDescription;
     }
 
     public void setOperationDescription(String operationDescription) {
@@ -325,12 +325,26 @@ public class Invoice implements VeriFactuInvoice {
 
         String fecha = issueDate.format(java.time.format.DateTimeFormatter.ofPattern("dd-MM-yyyy"));
 
-        return String.format(java.util.Locale.US, "%s?nif=%s&numserie=%s&fecha=%s&importe=%.2f",
+        java.math.BigDecimal amount = java.math.BigDecimal.valueOf(totalAmount)
+                .setScale(2, java.math.RoundingMode.HALF_UP);
+        String importe = amount.signum() == 0 ? "0.00" : amount.toPlainString();
+
+        // AEAT QR specification: every parameter value is URL-encoded (a series such as
+        // "A/2026 1" must not break the query string).
+        return String.format("%s?nif=%s&numserie=%s&fecha=%s&importe=%s",
                 baseUrl,
-                issuerTaxId,
-                invoiceNumber,
+                urlEncode(issuerTaxId),
+                urlEncode(invoiceNumber),
                 fecha,
-                totalAmount);
+                importe);
+    }
+
+    private static String urlEncode(String value) {
+        try {
+            return java.net.URLEncoder.encode(value, "UTF-8").replace("+", "%20");
+        } catch (java.io.UnsupportedEncodingException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /**

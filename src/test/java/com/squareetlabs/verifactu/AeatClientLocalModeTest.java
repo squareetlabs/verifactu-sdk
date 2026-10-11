@@ -15,6 +15,8 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -112,5 +114,35 @@ public class AeatClientLocalModeTest {
         String signedXml = new String(signedXmlBytes, java.nio.charset.StandardCharsets.UTF_8);
         assertTrue(signedXml.contains("RegistroAnulacion"));
         assertTrue(signedXml.contains("Signature"));
+    }
+
+    /** ISO 8601 sin fraccion de segundo (YYYY-MM-DDThh:mm:ss+hh:mm), el formato que exige la AEAT. */
+    private static final String ISO_TIMESTAMP = "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}[+-]\\d{2}:\\d{2}";
+
+    private static String signedXmlOf(Map<String, Object> response) {
+        return new String(Base64.getDecoder().decode((String) response.get("signedXml")),
+                java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static void assertTimestampsAreIso(Map<String, Object> response) {
+        Matcher inHash = Pattern.compile("FechaHoraHusoGenRegistro=([^&]*)").matcher((String) response.get("hashInput"));
+        assertTrue("La huella debe incluir FechaHoraHusoGenRegistro", inHash.find());
+        assertTrue("En la huella debe ser ISO 8601: " + inHash.group(1), inHash.group(1).matches(ISO_TIMESTAMP));
+
+        Matcher inXml = Pattern.compile("FechaHoraHusoGenRegistro>([^<]*)<").matcher(signedXmlOf(response));
+        assertTrue("El XML debe incluir FechaHoraHusoGenRegistro", inXml.find());
+        assertTrue("En el XML debe ser ISO 8601 sin fraccion: " + inXml.group(1), inXml.group(1).matches(ISO_TIMESTAMP));
+        assertEquals("El valor del XML y el de la huella deben coincidir", inXml.group(1), inHash.group(1));
+    }
+
+    @Test
+    public void sendInvoice_timestampIsIsoWithoutFractionAndMatchesHashInput() {
+        assertTimestampsAreIso(buildClient(false).sendInvoice(buildInvoice(), null));
+    }
+
+    @Test
+    public void sendAnnulment_timestampIsIsoWithoutFractionAndMatchesHashInput() {
+        assertTimestampsAreIso(buildClient(false)
+                .sendAnnulment(new Annulment("NOVF-TEST-001", LocalDate.of(2026, 9, 17)), null));
     }
 }

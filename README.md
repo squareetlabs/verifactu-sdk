@@ -91,6 +91,10 @@ Si autenticas con un **certificado de sello** (sello electrónico / sello de ent
 
 > Hasta la versión 1.3.0 el parámetro `production` no seleccionaba el endpoint y todos los envíos reales iban al de producción. Se corrige en 1.3.1.
 
+## Formatos enviados a la AEAT
+
+La versión 1.3.3 ajusta los formatos del registro a lo que exige la AEAT: `FechaHoraHusoGenRegistro` en ISO 8601 sin fracción de segundo (igual en el XML y en la huella), importes con dos decimales y nunca `-0.00`, operaciones exentas, no sujetas y de inversión del sujeto pasivo solo con la base, descripción de la operación tomada de la factura y URL del QR con los parámetros codificados. Un código de calificación o de exención desconocido falla con un mensaje claro.
+
 ## Detalle de la respuesta de la AEAT
 
 Desde la versión 1.3.2, `sendInvoice` y `sendAnnulment` añaden al mapa de respuesta el detalle por registro que devuelve la AEAT (las claves existentes no cambian). Siempre están presentes, con `null`, lista vacía o cadena vacía si no hay dato:

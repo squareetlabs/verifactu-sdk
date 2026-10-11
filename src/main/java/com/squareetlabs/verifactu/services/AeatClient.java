@@ -15,6 +15,8 @@ import javax.xml.datatype.XMLGregorianCalendar;
 import javax.xml.ws.Holder;
 import java.io.ByteArrayOutputStream;
 import java.net.URL;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.io.File;
@@ -27,6 +29,23 @@ import org.apache.cxf.frontend.ClientProxy;
 import org.apache.cxf.transport.http.HTTPConduit;
 
 public class AeatClient {
+
+    /** FechaHoraHusoGenRegistro: ISO 8601 without fractional seconds, e.g. 2024-01-01T19:20:30+01:00. */
+    private static final DateTimeFormatter AEAT_TIMESTAMP_FORMAT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
+
+    /**
+     * Formats an amount the way the AEAT expects it: dot as decimal separator, exactly two
+     * decimals, no exponent, and never "-0.00" (a value that rounds to zero is "0.00").
+     */
+    static String formatAmount(double value) {
+        BigDecimal amount = BigDecimal.valueOf(value).setScale(2, RoundingMode.HALF_UP);
+        return amount.signum() == 0 ? "0.00" : amount.toPlainString();
+    }
+
+    private static String truncate(String value, int maxLength) {
+        return value.length() <= maxLength ? value : value.substring(0, maxLength);
+    }
 
     private final String certPath;
     private final String certPassword;
@@ -53,19 +72,16 @@ public class AeatClient {
             String numSerie = invoice.getInvoiceNumber();
             String fechaExp = invoice.getIssueDate().format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
             String tipoFactura = invoice.getInvoiceType();
-            String cuotaTotal = String.format(Locale.US, "%.2f", invoice.getTaxAmount());
-            String importeTotal = String.format(Locale.US, "%.2f", invoice.getTotalAmount());
+            String cuotaTotal = formatAmount(invoice.getTaxAmount());
+            String importeTotal = formatAmount(invoice.getTotalAmount());
 
-            // Timestamp with Europe/Madrid timezone (AEAT requirement)
-            // Format: dd-MM-yyyy'T'HH:mm:ssXXX (e.g., "20-01-2026T14:30:45+01:00")
+            // Timestamp with Europe/Madrid timezone (AEAT requirement).
+            // FechaHoraHusoGenRegistro must be ISO 8601 without fractional seconds
+            // (YYYY-MM-DDThh:mm:ss+hh:mm) both in the XML and in the hash input, and both
+            // must carry exactly the same value.
             ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
-
-            // For hash generation: dd-MM-yyyy'T'HH:mm:ssXXX
-            String tsString = now.format(DateTimeFormatter.ofPattern("dd-MM-yyyy'T'HH:mm:ssXXX"));
-
-            // XMLGregorianCalendar for JAXB (Standard ISO format)
-            GregorianCalendar c = GregorianCalendar.from(now);
-            XMLGregorianCalendar tsXml = DatatypeFactory.newInstance().newXMLGregorianCalendar(c);
+            String tsString = now.format(AEAT_TIMESTAMP_FORMAT);
+            XMLGregorianCalendar tsXml = DatatypeFactory.newInstance().newXMLGregorianCalendar(tsString);
 
             // Get previous hash
             String prevHash = "";
@@ -133,7 +149,9 @@ public class AeatClient {
             // Actually, I'll bet it's an enum.
             registroAlta.setTipoFactura(ClaveTipoFacturaType.fromValue(tipoFactura));
 
-            registroAlta.setDescripcionOperacion("Factura " + numSerie);
+            String description = invoice.getOperationDescription();
+            registroAlta.setDescripcionOperacion(description != null && !description.trim().isEmpty()
+                    ? truncate(description.trim(), 500) : "Factura " + numSerie);
 
             // Breakdown (Desglose)
             registroAlta.setDesglose(buildBreakdowns(invoice));
@@ -200,16 +218,18 @@ public class AeatClient {
                 // corrective invoices (R1-R5 with correctionType = "S").
                 if ("S".equals(invoice.getCorrectionType()) && isCorrectiveInvoice(tipoFactura)) {
                     Map<String, String> importeRectificacion = buildImporteRectificacion(invoice);
-                    if (importeRectificacion != null) {
-                        DesgloseRectificacionType importe = new DesgloseRectificacionType();
-                        importe.setBaseRectificada(importeRectificacion.get("BaseRectificada"));
-                        importe.setCuotaRectificada(importeRectificacion.get("CuotaRectificada"));
-                        if (importeRectificacion.containsKey("CuotaRecargoRectificado")) {
-                            importe.setCuotaRecargoRectificado(
-                                    importeRectificacion.get("CuotaRecargoRectificado"));
-                        }
-                        registroAlta.setImporteRectificacion(importe);
+                    if (importeRectificacion == null) {
+                        throw new IllegalArgumentException("correctedBaseAmount and correctedTaxAmount are "
+                                + "required for a corrective invoice by substitution (TipoRectificativa = \"S\")");
                     }
+                    DesgloseRectificacionType importe = new DesgloseRectificacionType();
+                    importe.setBaseRectificada(importeRectificacion.get("BaseRectificada"));
+                    importe.setCuotaRectificada(importeRectificacion.get("CuotaRectificada"));
+                    if (importeRectificacion.containsKey("CuotaRecargoRectificado")) {
+                        importe.setCuotaRecargoRectificado(
+                                importeRectificacion.get("CuotaRecargoRectificado"));
+                    }
+                    registroAlta.setImporteRectificacion(importe);
                 }
             }
 
@@ -272,10 +292,8 @@ public class AeatClient {
             String fechaExp = annulment.getIssueDate().format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
 
             ZonedDateTime now = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
-            String tsString = now.format(DateTimeFormatter.ofPattern("dd-MM-yyyy'T'HH:mm:ssXXX"));
-
-            GregorianCalendar c = GregorianCalendar.from(now);
-            XMLGregorianCalendar tsXml = DatatypeFactory.newInstance().newXMLGregorianCalendar(c);
+            String tsString = now.format(AEAT_TIMESTAMP_FORMAT);
+            XMLGregorianCalendar tsXml = DatatypeFactory.newInstance().newXMLGregorianCalendar(tsString);
 
             String prevHash = "";
             if (previous != null && previous.containsKey("hash")) {
@@ -383,6 +401,12 @@ public class AeatClient {
         return si;
     }
 
+    private static boolean isBaseOnly(VeriFactuBreakdown b) {
+        String qualification = b.getCalificacionOperacion();
+        return b.getOperacionExenta() != null
+                || (qualification != null && (qualification.startsWith("N") || "S2".equals(qualification)));
+    }
+
     /**
      * Fills {@code GeneradoPor} and {@code Generador} when this annulment
      * record was NOT generated by the obligado itself (see
@@ -443,75 +467,42 @@ public class AeatClient {
             for (VeriFactuBreakdown b : breakdowns) {
                 DetalleType detalle = new DetalleType();
 
-                // Campos obligatorios básicos
-                detalle.setBaseImponibleOimporteNoSujeto(
-                        String.format(Locale.US, "%.2f", b.getBaseAmount()));
-                detalle.setCuotaRepercutida(
-                        String.format(Locale.US, "%.2f", b.getTaxAmount()));
-                detalle.setTipoImpositivo(
-                        String.format(Locale.US, "%.2f", b.getTaxRate()));
+                detalle.setBaseImponibleOimporteNoSujeto(formatAmount(b.getBaseAmount()));
 
-                // Campos AEAT adicionales (ClaveRegimen, CalificacionOperacion, etc.)
-                // Nota: Los tipos JAXB generados pueden variar según el XSD
-                // Si los tipos enum no existen, usar setters de String directamente
-
-                if (b.getClaveRegimen() != null) {
-                    try {
-                        // Intentar usar enum si existe
-                        detalle.setClaveRegimen(b.getClaveRegimen());
-                    } catch (Exception e) {
-                        // Si no existe el setter, el campo no está en el XSD
-                        // o requiere un tipo diferente
-                    }
+                // Exempt (E1-E6), not subject (N1, N2) and reverse-charge (S2) operations carry
+                // only the base: the AEAT rejects TipoImpositivo / CuotaRepercutida for them.
+                if (!isBaseOnly(b)) {
+                    detalle.setCuotaRepercutida(formatAmount(b.getTaxAmount()));
+                    detalle.setTipoImpositivo(formatAmount(b.getTaxRate()));
                 }
 
+                if (b.getClaveRegimen() != null) {
+                    detalle.setClaveRegimen(b.getClaveRegimen());
+                }
+
+                // An unknown code is a caller error: fail with a clear message instead of
+                // silently dropping the element and letting the AEAT reject an incomplete record.
                 if (b.getCalificacionOperacion() != null) {
-                    try {
-                        detalle.setCalificacionOperacion(
-                                CalificacionOperacionType.fromValue(b.getCalificacionOperacion()));
-                    } catch (Exception e) {
-                        // Campo no disponible o valor inválido
-                    }
+                    detalle.setCalificacionOperacion(
+                            CalificacionOperacionType.fromValue(b.getCalificacionOperacion()));
                 }
 
                 if (b.getOperacionExenta() != null) {
-                    try {
-                        detalle.setOperacionExenta(
-                                OperacionExentaType.fromValue(b.getOperacionExenta()));
-                    } catch (Exception e) {
-                        // Campo no disponible o valor inválido
-                    }
+                    detalle.setOperacionExenta(OperacionExentaType.fromValue(b.getOperacionExenta()));
                 }
 
-                // Campos opcionales
                 if (b.getBaseImponibleACoste() != null) {
-                    try {
-                        detalle.setBaseImponibleACoste(
-                                String.format(Locale.US, "%.2f", b.getBaseImponibleACoste()));
-                    } catch (Exception e) {
-                        // Campo no disponible en XSD actual
-                    }
+                    detalle.setBaseImponibleACoste(formatAmount(b.getBaseImponibleACoste()));
                 }
 
                 if (b.getTipoRecargoEquivalencia() != null) {
-                    try {
-                        detalle.setTipoRecargoEquivalencia(
-                                String.format(Locale.US, "%.2f", b.getTipoRecargoEquivalencia()));
-                    } catch (Exception e) {
-                        // Campo no disponible en XSD actual
-                    }
+                    detalle.setTipoRecargoEquivalencia(formatAmount(b.getTipoRecargoEquivalencia()));
                 }
 
                 if (b.getCuotaRecargoEquivalencia() != null) {
-                    try {
-                        detalle.setCuotaRecargoEquivalencia(
-                                String.format(Locale.US, "%.2f", b.getCuotaRecargoEquivalencia()));
-                    } catch (Exception e) {
-                        // Campo no disponible en XSD actual
-                    }
+                    detalle.setCuotaRecargoEquivalencia(formatAmount(b.getCuotaRecargoEquivalencia()));
                 }
 
-                // Add to list
                 desglose.getDetalleDesglose().add(detalle);
             }
         }
@@ -859,13 +850,13 @@ public class AeatClient {
         }
 
         Map<String, String> importe = new HashMap<>();
-        importe.put("BaseRectificada", String.format(Locale.US, "%.2f", baseRectificada));
-        importe.put("CuotaRectificada", String.format(Locale.US, "%.2f", cuotaRectificada));
+        importe.put("BaseRectificada", formatAmount(baseRectificada));
+        importe.put("CuotaRectificada", formatAmount(cuotaRectificada));
 
         // Add optional surcharge if present
         Double cuotaRecargo = invoice.getCorrectedSurchargeAmount();
         if (cuotaRecargo != null) {
-            importe.put("CuotaRecargoRectificado", String.format(Locale.US, "%.2f", cuotaRecargo));
+            importe.put("CuotaRecargoRectificado", formatAmount(cuotaRecargo));
         }
 
         return importe;
