@@ -928,6 +928,10 @@ public class InvoiceValidator {
         }
         checkRequiredText(f, "Versión del sistema informático", config.getSystemVersion(), 50);
         checkRequiredText(f, "Número de instalación", config.getInstallationNumber(), 100);
+        if (config.getConnectTimeoutMillis() <= 0 || config.getReadTimeoutMillis() <= 0) {
+            f.error("Los timeouts de conexión y de lectura deben ser mayores que 0 (milisegundos): conexión "
+                    + config.getConnectTimeoutMillis() + ", lectura " + config.getReadTimeoutMillis());
+        }
         for (String[] flag : new String[][] {
                 {"TipoUsoPosibleSoloVerifactu", config.getOnlyVerifactuCapable()},
                 {"TipoUsoPosibleMultiOT", config.getMultiObligatedCapable()},

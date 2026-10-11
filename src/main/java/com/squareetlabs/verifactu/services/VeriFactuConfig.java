@@ -45,6 +45,14 @@ public class VeriFactuConfig {
     // representative certificate) for backward compatibility.
     private boolean sealCertificate = false;
 
+    // Timeouts of the SOAP call to the AEAT, in milliseconds. A call that never answers must not hold the
+    // caller (and whatever it locks) forever: connecting defaults to 10 s and waiting for the answer to 30 s.
+    // The AEAT may have registered the record even when the answer does not arrive in time.
+    public static final int DEFAULT_CONNECT_TIMEOUT_MILLIS = 10_000;
+    public static final int DEFAULT_READ_TIMEOUT_MILLIS = 30_000;
+    private int connectTimeoutMillis = DEFAULT_CONNECT_TIMEOUT_MILLIS;
+    private int readTimeoutMillis = DEFAULT_READ_TIMEOUT_MILLIS;
+
     public VeriFactuConfig(String issuerName, String issuerVat) {
         this.issuerName = issuerName;
         this.issuerVat = issuerVat;
@@ -91,6 +99,24 @@ public class VeriFactuConfig {
     public boolean hasRepresentative() {
         return representativeName != null && !representativeName.trim().isEmpty()
                 && representativeVat != null && !representativeVat.trim().isEmpty();
+    }
+
+    public int getConnectTimeoutMillis() {
+        return connectTimeoutMillis;
+    }
+
+    /** Maximum time to establish the connection with the AEAT, in milliseconds (must be greater than 0). */
+    public void setConnectTimeoutMillis(int connectTimeoutMillis) {
+        this.connectTimeoutMillis = connectTimeoutMillis;
+    }
+
+    public int getReadTimeoutMillis() {
+        return readTimeoutMillis;
+    }
+
+    /** Maximum time to wait for the answer of the AEAT once the request is sent, in milliseconds (must be greater than 0). */
+    public void setReadTimeoutMillis(int readTimeoutMillis) {
+        this.readTimeoutMillis = readTimeoutMillis;
     }
 
     public boolean isSealCertificate() {

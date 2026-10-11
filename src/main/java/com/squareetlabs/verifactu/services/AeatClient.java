@@ -29,6 +29,7 @@ import org.apache.cxf.configuration.jsse.TLSClientParameters;
 import org.apache.cxf.endpoint.Client;
 import org.apache.cxf.frontend.ClientProxy;
 import org.apache.cxf.transport.http.HTTPConduit;
+import org.apache.cxf.transports.http.configuration.HTTPClientPolicy;
 
 public class AeatClient {
 
@@ -824,7 +825,16 @@ public class AeatClient {
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
             response.put("status", "error");
-            response.put("message", e.getMessage());
+            if (isTimeout(e)) {
+                // The record may have reached the AEAT even though the answer did not arrive in time: resend it
+                // unchanged (same generation timestamp and previous record) and treat a duplicate as a possible hit.
+                response.put("timeout", true);
+                response.put("message", "Tiempo de espera agotado esperando a la AEAT (conexion "
+                        + config.getConnectTimeoutMillis() + " ms, lectura " + config.getReadTimeoutMillis()
+                        + " ms): el registro pudo llegar a registrarse; reenvialo sin cambios");
+            } else {
+                response.put("message", e.getMessage());
+            }
             e.printStackTrace();
             return response;
         }
@@ -993,6 +1003,31 @@ public class AeatClient {
         tlsParams.setDisableCNCheck(true);
 
         http.setTlsClientParameters(tlsParams);
+        applyTimeouts(http, config);
+    }
+
+    /**
+     * Connection and read timeouts of the SOAP call. Without them a connection that never answers would hold the
+     * calling thread (and everything it holds, such as a database lock) indefinitely.
+     */
+    static void applyTimeouts(HTTPConduit http, VeriFactuConfig config) {
+        HTTPClientPolicy policy = http.getClient();
+        if (policy == null) {
+            policy = new HTTPClientPolicy();
+        }
+        policy.setConnectionTimeout(config.getConnectTimeoutMillis());
+        policy.setReceiveTimeout(config.getReadTimeoutMillis());
+        http.setClient(policy);
+    }
+
+    static boolean isTimeout(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause() == cause ? null : cause.getCause()) {
+            if (cause instanceof java.net.SocketTimeoutException || cause instanceof java.net.ConnectException
+                    && String.valueOf(cause.getMessage()).toLowerCase().contains("timed out")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
