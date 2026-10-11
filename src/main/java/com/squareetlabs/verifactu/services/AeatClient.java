@@ -666,19 +666,8 @@ public class AeatClient {
             // CALL
             port.regFactuSistemaFacturacion(cabecera, registros, csvH, datosH, cabeceraH, tiempoH, estadoH, lineaH);
 
-            // Construct response map
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "success");
-            response.put("aeat_status", estadoH.value != null ? estadoH.value.value() : "UNKNOWN");
-            response.put("csv", csvH.value);
-            response.put("hash", huella);
-            response.put("hashInput", huellaInputString);
-            response.put("number", numSerie);
-            response.put("date", fechaExp);
-            response.put("timestamp", ts);
-            response.put("submittedToAeat", true);
-
-            return response;
+            return buildSoapResponse(estadoH.value, csvH.value, datosH.value, tiempoH.value, lineaH.value,
+                    huella, huellaInputString, numSerie, fechaExp, ts);
 
         } catch (Exception e) {
             Map<String, Object> response = new HashMap<>();
@@ -687,6 +676,90 @@ public class AeatClient {
             e.printStackTrace();
             return response;
         }
+    }
+
+    /**
+     * Builds the response map of a SOAP submission. Besides the overall status it exposes the
+     * per-record outcome returned by the AEAT ({@code RespuestaExpedidaType}), so callers can tell
+     * why a submission was rejected: {@code aeat_error_code}, {@code aeat_error_message},
+     * {@code aeat_record_status}, {@code aeat_record_errors}, {@code aeat_submission_wait},
+     * {@code aeat_presenter_nif} and a one-line {@code aeat_message}. All of them are always
+     * present (null, empty list or empty string when there is no data).
+     */
+    static Map<String, Object> buildSoapResponse(EstadoEnvioType estado, String csv,
+            DatosPresentacionType datos, String tiempoEspera, List<RespuestaExpedidaType> lineas,
+            String huella, String huellaInputString, String numSerie, String fechaExp, String ts) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "success");
+        response.put("aeat_status", estado != null ? estado.value() : "UNKNOWN");
+        response.put("csv", csv);
+        response.put("hash", huella);
+        response.put("hashInput", huellaInputString);
+        response.put("number", numSerie);
+        response.put("date", fechaExp);
+        response.put("timestamp", ts);
+        response.put("submittedToAeat", true);
+
+        List<Map<String, Object>> recordErrors = new ArrayList<>();
+        String firstCode = null;
+        String firstMessage = null;
+        String recordStatus = null;
+        if (lineas != null) {
+            for (RespuestaExpedidaType linea : lineas) {
+                if (linea == null) {
+                    continue;
+                }
+                String code = linea.getCodigoErrorRegistro() != null ? linea.getCodigoErrorRegistro().toString() : null;
+                String message = linea.getDescripcionErrorRegistro();
+                String lineStatus = linea.getEstadoRegistro() != null ? linea.getEstadoRegistro().value() : null;
+                if (recordStatus == null) {
+                    recordStatus = lineStatus;
+                }
+                if (firstCode == null && code != null) {
+                    firstCode = code;
+                    firstMessage = message;
+                }
+                recordErrors.add(describeLine(linea, code, message, lineStatus));
+            }
+        }
+        response.put("aeat_record_status", recordStatus);
+        response.put("aeat_error_code", firstCode);
+        response.put("aeat_error_message", firstMessage);
+        response.put("aeat_record_errors", recordErrors);
+        response.put("aeat_submission_wait", tiempoEspera);
+        response.put("aeat_presenter_nif", datos != null ? datos.getNIFPresentador() : null);
+        response.put("aeat_message", firstCode == null ? ""
+                : "Codigo[" + firstCode + "]." + (firstMessage != null ? firstMessage : ""));
+        return response;
+    }
+
+    private static Map<String, Object> describeLine(RespuestaExpedidaType linea, String code, String message,
+            String lineStatus) {
+        Map<String, Object> detail = new HashMap<>();
+        detail.put("recordStatus", lineStatus);
+        detail.put("errorCode", code);
+        detail.put("errorMessage", message);
+        TipoOperacionType operation = linea.getOperacion() != null ? linea.getOperacion().getTipoOperacion() : null;
+        detail.put("operation", operation != null ? operation.value() : null);
+        Map<String, Object> invoiceId = new HashMap<>();
+        if (linea.getIDFactura() != null) {
+            invoiceId.put("issuerNif", linea.getIDFactura().getIDEmisorFactura());
+            invoiceId.put("number", linea.getIDFactura().getNumSerieFactura());
+            invoiceId.put("date", linea.getIDFactura().getFechaExpedicionFactura());
+        }
+        detail.put("invoiceId", invoiceId);
+        RegistroDuplicadoType duplicate = linea.getRegistroDuplicado();
+        if (duplicate != null) {
+            Map<String, Object> dup = new HashMap<>();
+            dup.put("requestId", duplicate.getIdPeticionRegistroDuplicado());
+            dup.put("recordStatus", duplicate.getEstadoRegistroDuplicado() != null
+                    ? duplicate.getEstadoRegistroDuplicado().value() : null);
+            dup.put("errorCode", duplicate.getCodigoErrorRegistro() != null
+                    ? duplicate.getCodigoErrorRegistro().toString() : null);
+            dup.put("errorMessage", duplicate.getDescripcionErrorRegistro());
+            detail.put("duplicate", dup);
+        }
+        return detail;
     }
 
     /**
@@ -705,6 +778,13 @@ public class AeatClient {
             response.put("status", "success");
             response.put("aeat_status", "NoRemitido");
             response.put("submittedToAeat", false);
+            response.put("aeat_record_status", null);
+            response.put("aeat_error_code", null);
+            response.put("aeat_error_message", null);
+            response.put("aeat_record_errors", new ArrayList<Map<String, Object>>());
+            response.put("aeat_submission_wait", null);
+            response.put("aeat_presenter_nif", null);
+            response.put("aeat_message", "");
             response.put("hash", huella);
             response.put("hashInput", huellaInputString);
             response.put("number", numSerie);
