@@ -3,8 +3,10 @@ package com.squareetlabs.verifactu.examples;
 import com.squareetlabs.verifactu.models.Breakdown;
 import com.squareetlabs.verifactu.models.Invoice;
 import com.squareetlabs.verifactu.models.InvoiceType;
+import com.squareetlabs.verifactu.models.Recipient;
 import com.squareetlabs.verifactu.models.RegimeType;
 import com.squareetlabs.verifactu.models.OperationType;
+import com.squareetlabs.verifactu.helpers.InvoiceValidator;
 import com.squareetlabs.verifactu.services.AeatClient;
 import com.squareetlabs.verifactu.services.VeriFactuConfig;
 
@@ -71,17 +73,31 @@ public class BasicInvoiceExample {
         );
         invoice.setBreakdowns(Collections.singletonList(breakdown));
 
+        // Destinatario. Una F1 identifica al cliente: nombre y NIF espanol, o pais + tipo de
+        // documento + identificador si es extranjero (ver InvoiceTypesExample).
+        invoice.setRecipients(Collections.singletonList(new Recipient("Cliente Ejemplo S.L.", "B12345674")));
+
+        // 4b. Validacion previa (opcional: sendInvoice la ejecuta igualmente y no envia nada si
+        // hay errores). Util para avisar al usuario antes de intentar el envio.
+        InvoiceValidator.ValidationResult validation = InvoiceValidator.validate(invoice, config);
+        if (!validation.isValid()) {
+            System.out.println(validation.getErrorMessage());
+            return;
+        }
+
         // 5. Enviar. El segundo parametro es el registro anterior de la
         // cadena (null = primer registro / PrimerRegistroCadenaType.S). Ver
         // ChainingExample para el encadenamiento entre varias facturas.
         Map<String, Object> response = client.sendInvoice(invoice, null);
 
-        if ("success".equals(response.get("status"))) {
+        if ("success".equals(response.get("status")) && !"Incorrecto".equals(response.get("aeat_status"))) {
             System.out.println("Factura registrada. CSV: " + response.get("csv"));
             System.out.println("Huella (hash): " + response.get("hash"));
             System.out.println("Estado AEAT: " + response.get("aeat_status"));
         } else {
             System.out.println("Error al enviar la factura: " + response.get("message"));
+            // Si la AEAT rechazo el registro, el motivo esta en aeat_error_code / aeat_error_message
+            // (ver ResponseHandlingExample).
         }
     }
 }

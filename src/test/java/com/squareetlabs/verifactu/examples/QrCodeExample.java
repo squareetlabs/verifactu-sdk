@@ -18,11 +18,22 @@ public class QrCodeExample {
         String url = invoice.getValidationUrl(false); // false = entorno de pruebas, true = produccion
         System.out.println("URL de validacion: " + url);
 
-        // Imagen PNG del QR ya generada (usa ZXing internamente), tamaño por defecto 200x200.
+        // Sistema que emite facturas NO verificables (modo NO VERI*FACTU): la AEAT usa otro servicio
+        // de cotejo (ValidarQRNoVerifactu).
+        String urlNoVerifactu = invoice.getValidationUrl(false, false);
+        System.out.println("URL (no verificable): " + urlNoVerifactu);
+
+        // Imagen PNG del QR ya generada (usa ZXing internamente con correccion de errores nivel M,
+        // como exige la AEAT), tamaño por defecto 200x200.
         byte[] qrPngDefault = invoice.getValidationQR(false);
 
         // O especificando el tamaño en pixeles:
         byte[] qrPng300 = invoice.getValidationQR(false, 300);
+        byte[] qrNoVerifactu = invoice.getValidationQR(false, false, 300);
+
+        // En la factura impresa: tamaño entre 30x30 y 40x40 mm, el texto "QR tributario:" encima y,
+        // en sistemas VERI*FACTU, "Factura verificable en la sede electronica de la AEAT" o
+        // "VERI*FACTU" debajo.
 
         System.out.println("QR generado: " + qrPng300.length + " bytes (PNG)");
 

@@ -1,6 +1,7 @@
 package com.squareetlabs.verifactu.contracts;
 
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -209,5 +210,64 @@ public interface VeriFactuInvoice {
      */
     default Boolean getMultipleObligatedIndicator() {
         return null;
+    }
+
+    /**
+     * Invoices rectified by this one ({@code FacturasRectificadas}). Recommended for every
+     * corrective invoice (R1-R5): it tells the AEAT which invoice is being corrected.
+     */
+    default List<VeriFactuInvoiceReference> getRectifiedInvoices() {
+        return Collections.emptyList();
+    }
+
+    /**
+     * Simplified invoices replaced by this one ({@code FacturasSustituidas}), for type F3.
+     */
+    default List<VeriFactuInvoiceReference> getSubstitutedInvoices() {
+        return Collections.emptyList();
+    }
+
+    /**
+     * {@code true} for a complete invoice issued without identifying the recipient
+     * (art. 6.1.d RD 1619/2012, {@code FacturaSinIdentifDestinatarioArt61d = S}). It replaces the
+     * recipients, which must then be empty.
+     */
+    default boolean isWithoutRecipientIdentification() {
+        return false;
+    }
+
+    /**
+     * {@code true} for a correction ("subsanación") record of an invoice already generated or sent
+     * ({@code Subsanacion = S}): same invoice key, complete and correct data, when no corrective
+     * invoice is required (see the AEAT table of admissible operations).
+     */
+    default boolean isSubsanation() {
+        return false;
+    }
+
+    /**
+     * {@code RechazoPrevio} of the record: {@code null}/{@code "N"} (default), {@code "X"} when the
+     * previous record of the same invoice was rejected and therefore does not exist at the AEAT
+     * ("alta por rechazo": {@code Subsanacion = S} and {@code RechazoPrevio = X}), or {@code "S"}
+     * when a previous correction of a record already registered was rejected.
+     */
+    default String getPreviousRejection() {
+        return null;
+    }
+
+    /**
+     * {@code true} for a "qualified simplified invoice" (art. 7.2 and 7.3 RD 1619/2012,
+     * {@code FacturaSimplificadaArt7273 = S}). Only for F1, F3 and R1-R4.
+     */
+    default boolean isQualifiedSimplified() {
+        return false;
+    }
+
+    /**
+     * {@code true} when the base was reduced by coupons, bonuses or discounts and only the original
+     * of the invoice is issued ({@code Cupon = S}). Only for R1 and R5.
+     */
+    default boolean isCoupon() {
+        return false;
     }
 }

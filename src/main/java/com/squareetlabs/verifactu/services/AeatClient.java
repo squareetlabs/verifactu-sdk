@@ -1,10 +1,12 @@
 package com.squareetlabs.verifactu.services;
 
 import com.squareetlabs.verifactu.contracts.VeriFactuInvoice;
+import com.squareetlabs.verifactu.contracts.VeriFactuInvoiceReference;
 import com.squareetlabs.verifactu.contracts.VeriFactuBreakdown;
 import com.squareetlabs.verifactu.contracts.VeriFactuRecipient;
 import com.squareetlabs.verifactu.contracts.VeriFactuAnnulment;
 import com.squareetlabs.verifactu.helpers.HashHelper;
+import com.squareetlabs.verifactu.helpers.InvoiceValidator;
 import com.squareetlabs.verifactu.aeat.*;
 
 import javax.xml.bind.JAXBContext;
@@ -66,6 +68,11 @@ public class AeatClient {
 
     public Map<String, Object> sendInvoice(VeriFactuInvoice invoice, Map<String, Object> previous) {
         try {
+            InvoiceValidator.ValidationResult validation = InvoiceValidator.validate(invoice, config);
+            if (!validation.isValid()) {
+                return validationFailure(validation);
+            }
+
             // 1. Prepare common data
             String issuerName = config.getIssuerName() != null ? config.getIssuerName() : "";
             String issuerVat = config.getIssuerVat() != null ? config.getIssuerVat() : "";
@@ -163,6 +170,27 @@ public class AeatClient {
             // Chaining (Encadenamiento)
             registroAlta.setEncadenamiento(buildChaining(previous, issuerVat));
 
+            // Rectified / substituted invoices (FacturasRectificadas / FacturasSustituidas)
+            List<IDFacturaARType> rectified = buildReferences(invoice.getRectifiedInvoices(), issuerVat);
+            if (!rectified.isEmpty()) {
+                RegistroFacturacionAltaType.FacturasRectificadas facturasRectificadas =
+                        new RegistroFacturacionAltaType.FacturasRectificadas();
+                facturasRectificadas.getIDFacturaRectificada().addAll(rectified);
+                registroAlta.setFacturasRectificadas(facturasRectificadas);
+            }
+            List<IDFacturaARType> substituted = buildReferences(invoice.getSubstitutedInvoices(), issuerVat);
+            if (!substituted.isEmpty()) {
+                RegistroFacturacionAltaType.FacturasSustituidas facturasSustituidas =
+                        new RegistroFacturacionAltaType.FacturasSustituidas();
+                facturasSustituidas.getIDFacturaSustituida().addAll(substituted);
+                registroAlta.setFacturasSustituidas(facturasSustituidas);
+            }
+
+            // Complete invoice issued without identifying the recipient (art. 6.1.d)
+            if (invoice.isWithoutRecipientIdentification()) {
+                registroAlta.setFacturaSinIdentifDestinatarioArt61D(CompletaSinDestinatarioType.S);
+            }
+
             // Recipients
             List<PersonaFisicaJuridicaType> destinatarios = buildRecipients(invoice);
             if (!destinatarios.isEmpty()) {
@@ -241,6 +269,30 @@ public class AeatClient {
                 }
             }
 
+            // Correction of a previously generated / rejected record (Subsanacion / RechazoPrevio)
+            if (invoice.isSubsanation()) {
+                registroAlta.setSubsanacion(SubsanacionType.S);
+            }
+            String previousRejection = invoice.getPreviousRejection();
+            if (previousRejection != null && !previousRejection.trim().isEmpty()) {
+                registroAlta.setRechazoPrevio(RechazoPrevioType.fromValue(previousRejection.trim()));
+            }
+
+            // Qualified simplified invoice (art. 7.2 and 7.3 RD 1619/2012)
+            if (invoice.isQualifiedSimplified()) {
+                registroAlta.setFacturaSimplificadaArt7273(SimplificadaCualificadaType.S);
+            }
+
+            // Coupons / bonuses / discounts with only the original issued (Cupon = S)
+            if (invoice.isCoupon()) {
+                registroAlta.setCupon(CuponType.S);
+            }
+
+            // Macrodato is mandatory when |ImporteTotal| >= 100,000,000.00
+            if (Math.abs(invoice.getTotalAmount()) >= 100_000_000d) {
+                registroAlta.setMacrodato(MacrodatoType.S);
+            }
+
             // Wrap in RegistroFactura
             RegistroFacturaType registroFactura = new RegistroFacturaType();
             registroFactura.setRegistroAlta(registroAlta);
@@ -287,6 +339,11 @@ public class AeatClient {
      */
     public Map<String, Object> sendAnnulment(VeriFactuAnnulment annulment, Map<String, Object> previous) {
         try {
+            InvoiceValidator.ValidationResult validation = InvoiceValidator.validate(annulment, config);
+            if (!validation.isValid()) {
+                return validationFailure(validation);
+            }
+
             String issuerVat = config.getIssuerVat() != null ? config.getIssuerVat() : "";
             String numSerie = annulment.getInvoiceNumber();
             String fechaExp = annulment.getIssueDate().format(DateTimeFormatter.ofPattern("dd-MM-yyyy"));
@@ -404,7 +461,7 @@ public class AeatClient {
     private static boolean isBaseOnly(VeriFactuBreakdown b) {
         String qualification = b.getCalificacionOperacion();
         return b.getOperacionExenta() != null
-                || (qualification != null && (qualification.startsWith("N") || "S2".equals(qualification)));
+                || (qualification != null && qualification.startsWith("N"));
     }
 
     /**
@@ -469,11 +526,19 @@ public class AeatClient {
 
                 detalle.setBaseImponibleOimporteNoSujeto(formatAmount(b.getBaseAmount()));
 
-                // Exempt (E1-E6), not subject (N1, N2) and reverse-charge (S2) operations carry
-                // only the base: the AEAT rejects TipoImpositivo / CuotaRepercutida for them.
-                if (!isBaseOnly(b)) {
+                // Exempt (E1-E8) and not subject (N1, N2) operations carry only the base: the AEAT
+                // rejects TipoImpositivo / CuotaRepercutida for them. Reverse charge (S2) is the
+                // opposite: TipoImpositivo and CuotaRepercutida are mandatory and must be 0.
+                if ("S2".equals(b.getCalificacionOperacion())) {
+                    detalle.setTipoImpositivo(formatAmount(0));
+                    detalle.setCuotaRepercutida(formatAmount(0));
+                } else if (!isBaseOnly(b)) {
                     detalle.setCuotaRepercutida(formatAmount(b.getTaxAmount()));
                     detalle.setTipoImpositivo(formatAmount(b.getTaxRate()));
+                }
+
+                if (b.getTax() != null && !b.getTax().trim().isEmpty()) {
+                    detalle.setImpuesto(b.getTax().trim());
                 }
 
                 if (b.getClaveRegimen() != null) {
@@ -526,6 +591,45 @@ public class AeatClient {
         return enc;
     }
 
+    /**
+     * Response for a record that failed the local validation: nothing is signed, chained or sent.
+     * Same shape as any other error ({@code status=error} + {@code message}), plus the individual
+     * findings in {@code validation_errors}.
+     */
+    private static Map<String, Object> validationFailure(InvoiceValidator.ValidationResult validation) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "error");
+        response.put("message", "Validacion local: " + validation.getErrorSummary());
+        response.put("validation_errors", new ArrayList<>(validation.getErrors()));
+        return response;
+    }
+
+    /** A recipient with an explicit identification type, or a non-Spanish country, uses IDOtro. */
+    static boolean isForeignRecipient(VeriFactuRecipient recipient) {
+        String country = recipient.getCountryCode();
+        boolean foreignCountry = country != null && !country.trim().isEmpty()
+                && !"ES".equalsIgnoreCase(country.trim());
+        String idType = recipient.getIdType();
+        return foreignCountry || (idType != null && !idType.trim().isEmpty());
+    }
+
+    private static List<IDFacturaARType> buildReferences(List<VeriFactuInvoiceReference> references,
+            String defaultIssuer) {
+        List<IDFacturaARType> ids = new ArrayList<>();
+        if (references != null) {
+            for (VeriFactuInvoiceReference ref : references) {
+                IDFacturaARType id = new IDFacturaARType();
+                id.setIDEmisorFactura(ref.getIssuerTaxId() != null && !ref.getIssuerTaxId().trim().isEmpty()
+                        ? ref.getIssuerTaxId() : defaultIssuer);
+                id.setNumSerieFactura(ref.getInvoiceNumber());
+                id.setFechaExpedicionFactura(
+                        ref.getIssueDate().format(DateTimeFormatter.ofPattern("dd-MM-yyyy")));
+                ids.add(id);
+            }
+        }
+        return ids;
+    }
+
     private List<PersonaFisicaJuridicaType> buildRecipients(VeriFactuInvoice invoice) {
         List<PersonaFisicaJuridicaType> list = new ArrayList<>();
         List<VeriFactuRecipient> recipients = invoice.getRecipients();
@@ -533,7 +637,17 @@ public class AeatClient {
             for (VeriFactuRecipient r : recipients) {
                 PersonaFisicaJuridicaType p = new PersonaFisicaJuridicaType();
                 p.setNombreRazon(r.getName());
-                p.setNIF(r.getTaxId());
+                if (isForeignRecipient(r)) {
+                    IDOtroType idOtro = new IDOtroType();
+                    if (r.getCountryCode() != null) {
+                        idOtro.setCodigoPais(CountryType2.fromValue(r.getCountryCode().trim().toUpperCase()));
+                    }
+                    idOtro.setIDType(r.getIdType());
+                    idOtro.setID(r.getTaxId());
+                    p.setIDOtro(idOtro);
+                } else {
+                    p.setNIF(r.getTaxId());
+                }
                 list.add(p);
             }
         }
