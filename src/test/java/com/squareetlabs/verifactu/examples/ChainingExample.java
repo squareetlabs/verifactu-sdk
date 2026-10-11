@@ -3,6 +3,7 @@ package com.squareetlabs.verifactu.examples;
 import com.squareetlabs.verifactu.models.Breakdown;
 import com.squareetlabs.verifactu.models.Invoice;
 import com.squareetlabs.verifactu.models.InvoiceType;
+import com.squareetlabs.verifactu.models.Recipient;
 import com.squareetlabs.verifactu.models.OperationType;
 import com.squareetlabs.verifactu.models.RegimeType;
 import com.squareetlabs.verifactu.services.AeatClient;
@@ -34,6 +35,7 @@ public class ChainingExample {
         first.setTaxAmount(21.00);
         first.setBreakdowns(Collections.singletonList(
                 new Breakdown(RegimeType.GENERAL.getCode(), OperationType.S1.getCode(), 21.0, 100.00, 21.00)));
+        first.setRecipients(Collections.singletonList(new Recipient("Cliente Ejemplo S.L.", "B12345674")));
 
         // previous = null -> este es el PRIMER registro de la cadena
         // (PrimerRegistroCadenaType.S). El SDK genera el hash y lo devuelve
@@ -49,10 +51,14 @@ public class ChainingExample {
         second.setTaxAmount(42.00);
         second.setBreakdowns(Collections.singletonList(
                 new Breakdown(RegimeType.GENERAL.getCode(), OperationType.S1.getCode(), 21.0, 200.00, 42.00)));
+        second.setRecipients(Collections.singletonList(new Recipient("Cliente Ejemplo S.L.", "B12345674")));
 
         // Pasando la respuesta completa de la factura anterior, el SDK rellena
-        // Encadenamiento.RegistroAnterior con su numero/fecha/huella.
-        Map<String, Object> secondResponse = client.sendInvoice(second, firstResponse);
+        // Encadenamiento.RegistroAnterior con su numero/fecha/huella. Encadena SOLO con un registro
+        // aceptado: la huella de uno rechazado (aeat_status = Incorrecto) o con error no entra en la
+        // cadena de la AEAT (ver ResponseHandlingExample#isChainable).
+        Map<String, Object> previous = ResponseHandlingExample.isChainable(firstResponse) ? firstResponse : null;
+        Map<String, Object> secondResponse = client.sendInvoice(second, previous);
 
         System.out.println("Hash 1: " + firstResponse.get("hash"));
         System.out.println("Hash 2: " + secondResponse.get("hash"));

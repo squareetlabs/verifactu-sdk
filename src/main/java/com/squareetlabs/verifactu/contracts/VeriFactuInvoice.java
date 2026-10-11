@@ -1,6 +1,7 @@
 package com.squareetlabs.verifactu.contracts;
 
 import java.time.LocalDate;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -209,5 +210,29 @@ public interface VeriFactuInvoice {
      */
     default Boolean getMultipleObligatedIndicator() {
         return null;
+    }
+
+    /**
+     * Invoices rectified by this one ({@code FacturasRectificadas}). Recommended for every
+     * corrective invoice (R1-R5): it tells the AEAT which invoice is being corrected.
+     */
+    default List<VeriFactuInvoiceReference> getRectifiedInvoices() {
+        return Collections.emptyList();
+    }
+
+    /**
+     * Simplified invoices replaced by this one ({@code FacturasSustituidas}), for type F3.
+     */
+    default List<VeriFactuInvoiceReference> getSubstitutedInvoices() {
+        return Collections.emptyList();
+    }
+
+    /**
+     * {@code true} for a complete invoice issued without identifying the recipient
+     * (art. 6.1.d RD 1619/2012, {@code FacturaSinIdentifDestinatarioArt61d = S}). It replaces the
+     * recipients, which must then be empty.
+     */
+    default boolean isWithoutRecipientIdentification() {
+        return false;
     }
 }

@@ -3,6 +3,7 @@ package com.squareetlabs.verifactu;
 import com.squareetlabs.verifactu.models.Annulment;
 import com.squareetlabs.verifactu.models.Breakdown;
 import com.squareetlabs.verifactu.models.Invoice;
+import com.squareetlabs.verifactu.models.InvoiceReference;
 import com.squareetlabs.verifactu.models.InvoiceType;
 import com.squareetlabs.verifactu.services.AeatClient;
 import com.squareetlabs.verifactu.services.VeriFactuConfig;
@@ -202,7 +203,7 @@ public class AeatXsdValidationTest {
 
     @Test
     public void severalVatRates() {
-        check("Varios tipos de IVA", client().sendInvoice(invoice("FCT2600004", InvoiceType.F1, 6.8, 56.8,
+        check("Varios tipos de IVA", client().sendInvoice(invoice("FCT2600004", InvoiceType.F1, 6.6, 56.6,
                 line(21, 20, 4.2), line(10, 20, 2), line(4, 10, 0.4)), null), true);
     }
 
@@ -361,5 +362,85 @@ public class AeatXsdValidationTest {
 
         invoice.setTotalAmount(-0.001);
         assertTrue(invoice.getValidationUrl(true).endsWith("&importe=0.00"));
+    }
+
+    // ─── Funciones del SDK: referencias, IDOtro, art. 6.1.d y validacion previa ─
+
+    @Test
+    public void corrective_carriesTheRectifiedInvoice() {
+        Invoice invoice = invoice("RCT2600004", InvoiceType.R1, -4.2, -24.2, line(21, -20, -4.2));
+        invoice.setCorrectionType("I");
+        invoice.setRecipients(Collections.singletonList(new Recipient("Cliente Uno SL", "B12345674")));
+        invoice.setRectifiedInvoices(Collections.singletonList(new InvoiceReference("FCT2600001", LocalDate.of(2026, 10, 1))));
+        Map<String, Object> response = client().sendInvoice(invoice, null);
+        check("Rectificativa con factura rectificada", response, true);
+
+        String xml = signedXml(response);
+        assertEquals("FCT2600001", first(xml, "NumSerieFactura") == null ? null : all(xml, "NumSerieFactura").get(1));
+        assertEquals("01-10-2026", all(xml, "FechaExpedicionFactura").get(1));
+        assertEquals("B72877814", all(xml, "IDEmisorFactura").get(1));
+        assertTrue(xml.contains("IDFacturaRectificada"));
+    }
+
+    @Test
+    public void f3_carriesTheSubstitutedInvoices() {
+        Invoice invoice = invoice("FCT2600017", InvoiceType.F3, 4.2, 24.2, line(21, 20, 4.2));
+        invoice.setRecipients(Collections.singletonList(new Recipient("Cliente Uno SL", "B12345674")));
+        invoice.setSubstitutedInvoices(Arrays.<com.squareetlabs.verifactu.contracts.VeriFactuInvoiceReference>asList(
+                new InvoiceReference("FS2600001", LocalDate.of(2026, 10, 2)),
+                new InvoiceReference("B12345674", "FS2600002", LocalDate.of(2026, 10, 3))));
+        Map<String, Object> response = client().sendInvoice(invoice, null);
+        check("F3 con facturas sustituidas", response, true);
+        assertTrue(signedXml(response).contains("IDFacturaSustituida"));
+    }
+
+    @Test
+    public void foreignRecipient_isSentAsIdOtro() {
+        Invoice invoice = invoice("FCT2600018", InvoiceType.F1, 4.2, 24.2, line(21, 20, 4.2));
+        invoice.setRecipients(Arrays.<com.squareetlabs.verifactu.contracts.VeriFactuRecipient>asList(
+                new Recipient("Client SARL", "FR12345678901", "FR", "02"),
+                new Recipient("John Smith", "P1234567", "GB", "03")));
+        Map<String, Object> response = client().sendInvoice(invoice, null);
+        check("Destinatarios extranjeros", response, true);
+
+        String xml = signedXml(response);
+        assertEquals(Arrays.asList("FR", "GB"), all(xml, "CodigoPais"));
+        assertEquals(Arrays.asList("02", "03"), all(xml, "IDType"));
+        assertEquals(Arrays.asList("FR12345678901", "P1234567"), all(xml, "ID"));
+        assertTrue("Un destinatario extranjero no lleva NIF", all(xml, "NIF").stream().noneMatch(v -> v.startsWith("FR")));
+    }
+
+    @Test
+    public void withoutRecipientIdentification_art61d() {
+        Invoice invoice = invoice("FCT2600019", InvoiceType.F1, 4.2, 24.2, line(21, 20, 4.2));
+        invoice.setWithoutRecipientIdentification(true);
+        Map<String, Object> response = client().sendInvoice(invoice, null);
+        check("Factura sin identificacion del destinatario", response, true);
+        assertEquals("S", first(signedXml(response), "FacturaSinIdentifDestinatarioArt61d"));
+    }
+
+    @Test
+    public void invalidInvoice_isRefusedBeforeSigningOrSending() {
+        Invoice invoice = invoice("FCT2600020", InvoiceType.F1, 4.2, 24.2, line(21, 20, 4.2));
+        invoice.setIssueDate(LocalDate.now().plusDays(3));
+        invoice.setRecipients(Collections.singletonList(new Recipient("Cliente", "B12345678")));
+
+        Map<String, Object> response = client().sendInvoice(invoice, null);
+
+        assertEquals("error", response.get("status"));
+        assertTrue(String.valueOf(response.get("message")).startsWith("Validacion local:"));
+        assertTrue(String.valueOf(response.get("message")).contains("posterior a hoy"));
+        assertTrue(String.valueOf(response.get("message")).contains("NIF inválido"));
+        assertEquals(2, ((java.util.List<?>) response.get("validation_errors")).size());
+        org.junit.Assert.assertFalse("No debe firmarse ni devolver huella", response.containsKey("signedXml"));
+        org.junit.Assert.assertFalse(response.containsKey("hash"));
+    }
+
+    @Test
+    public void invalidAnnulment_isRefusedBeforeSigningOrSending() {
+        Map<String, Object> response = client().sendAnnulment(new Annulment("FCT2600001", LocalDate.now().plusDays(3)), null);
+        assertEquals("error", response.get("status"));
+        assertTrue(String.valueOf(response.get("message")).contains("posterior a hoy"));
+        org.junit.Assert.assertFalse(response.containsKey("signedXml"));
     }
 }

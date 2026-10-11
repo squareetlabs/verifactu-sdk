@@ -2,6 +2,7 @@ package com.squareetlabs.verifactu.models;
 
 import com.squareetlabs.verifactu.contracts.VeriFactuBreakdown;
 import com.squareetlabs.verifactu.contracts.VeriFactuInvoice;
+import com.squareetlabs.verifactu.contracts.VeriFactuInvoiceReference;
 import com.squareetlabs.verifactu.contracts.VeriFactuRecipient;
 
 import java.time.LocalDate;
@@ -36,6 +37,10 @@ public class Invoice implements VeriFactuInvoice {
     private String thirdPartyName;
     private String thirdPartyTaxId;
     private Boolean multipleObligatedIndicator;
+
+    private List<VeriFactuInvoiceReference> rectifiedInvoices = new ArrayList<>();
+    private List<VeriFactuInvoiceReference> substitutedInvoices = new ArrayList<>();
+    private boolean withoutRecipientIdentification;
 
     @Override
     public String getInvoiceNumber() {
@@ -380,5 +385,32 @@ public class Invoice implements VeriFactuInvoice {
      */
     public byte[] getValidationQR(boolean production) throws Exception {
         return getValidationQR(production, 200);
+    }
+
+    @Override
+    public List<VeriFactuInvoiceReference> getRectifiedInvoices() {
+        return rectifiedInvoices;
+    }
+
+    public void setRectifiedInvoices(List<VeriFactuInvoiceReference> rectifiedInvoices) {
+        this.rectifiedInvoices = rectifiedInvoices != null ? rectifiedInvoices : new ArrayList<>();
+    }
+
+    @Override
+    public List<VeriFactuInvoiceReference> getSubstitutedInvoices() {
+        return substitutedInvoices;
+    }
+
+    public void setSubstitutedInvoices(List<VeriFactuInvoiceReference> substitutedInvoices) {
+        this.substitutedInvoices = substitutedInvoices != null ? substitutedInvoices : new ArrayList<>();
+    }
+
+    @Override
+    public boolean isWithoutRecipientIdentification() {
+        return withoutRecipientIdentification;
+    }
+
+    public void setWithoutRecipientIdentification(boolean withoutRecipientIdentification) {
+        this.withoutRecipientIdentification = withoutRecipientIdentification;
     }
 }

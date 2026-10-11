@@ -19,4 +19,22 @@ public interface VeriFactuRecipient {
      * @return String or null
      */
     String getTaxId();
+
+    /**
+     * ISO 3166-1 alpha-2 country code of a recipient identified with a foreign document
+     * ({@code IDOtro}). {@code null} (default) or {@code "ES"} with no {@link #getIdType()} means a
+     * Spanish NIF.
+     */
+    default String getCountryCode() {
+        return null;
+    }
+
+    /**
+     * AEAT identification type for a foreign recipient ({@code IDOtro.IDType}): 02 NIF-IVA,
+     * 03 passport, 04 official document of the country of residence, 05 residence certificate,
+     * 06 other proof, 07 not registered. {@code null} (default) means a Spanish NIF.
+     */
+    default String getIdType() {
+        return null;
+    }
 }

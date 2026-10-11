@@ -29,7 +29,7 @@ Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu 
 <dependency>
     <groupId>com.squareetlabs</groupId>
     <artifactId>verifactu</artifactId>
-    <version>1.2.0</version>
+    <version>1.4.0</version>
 </dependency>
 ```
 
@@ -91,9 +91,17 @@ Si autenticas con un **certificado de sello** (sello electrónico / sello de ent
 
 > Hasta la versión 1.3.0 el parámetro `production` no seleccionaba el endpoint y todos los envíos reales iban al de producción. Se corrige en 1.3.1.
 
-## Formatos enviados a la AEAT
+## Novedades
 
-La versión 1.3.3 ajusta los formatos del registro a lo que exige la AEAT: `FechaHoraHusoGenRegistro` en ISO 8601 sin fracción de segundo (igual en el XML y en la huella), importes con dos decimales y nunca `-0.00`, operaciones exentas, no sujetas y de inversión del sujeto pasivo solo con la base, descripción de la operación tomada de la factura y URL del QR con los parámetros codificados. Un código de calificación o de exención desconocido falla con un mensaje claro.
+**1.4.0**
+- `InvoiceValidator` es ahora un validador completo (facturas, anulaciones y configuración, con errores y avisos) y `AeatClient` lo ejecuta antes de enviar. Ya no rechaza importes negativos, que son legales en las rectificativas por diferencias.
+- Rectificativas: `setRectifiedInvoices` (`FacturasRectificadas`) y, para F3, `setSubstitutedInvoices` (`FacturasSustituidas`).
+- Destinatarios extranjeros con `IDOtro` (país y tipo de documento) y facturas sin identificación del destinatario (`setWithoutRecipientIdentification`).
+- `Invoice#getOperationDescription` devuelve el valor tal cual (antes devolvía `"Invoice issued"` si no estaba informado); el cliente usa `Factura <número>` por defecto.
+
+**1.3.3** — Formatos enviados a la AEAT: `FechaHoraHusoGenRegistro` en ISO 8601 sin fracción de segundo (igual en el XML y en la huella), importes con dos decimales y nunca `-0.00`, operaciones exentas, no sujetas y de inversión del sujeto pasivo solo con la base, descripción de la operación tomada de la factura y URL del QR con los parámetros codificados. Un código de calificación o de exención desconocido falla con un mensaje claro.
+
+**1.3.2** — Detalle de la respuesta de la AEAT (ver más abajo).
 
 ## Detalle de la respuesta de la AEAT
 
@@ -109,6 +117,8 @@ Desde la versión 1.3.2, `sendInvoice` y `sendAnnulment` añaden al mapa de resp
 | `aeat_message` | Resumen en una línea, `Codigo[<código>].<descripción>` |
 
 En modo NO VERI*FACTU las claves existen pero vacías, porque no hay respuesta de la AEAT.
+
+Si el registro no pasa la validación local, la respuesta es `status=error` con `message` y `validation_errors` (lista de errores), y no se firma ni se envía nada. Ejemplo de lectura completa de la respuesta, incluida la regla de **encadenar solo con registros aceptados**: [`ResponseHandlingExample.java`](src/test/java/com/squareetlabs/verifactu/examples/ResponseHandlingExample.java).
 
 ## Uso rápido: crear y enviar una factura
 
@@ -178,8 +188,8 @@ En **ambos modos** el hash se calcula y encadena exactamente igual (misma huella
 |---|---|---|
 | `InvoiceType.F1` | F1 | Factura estándar |
 | `InvoiceType.F2` | F2 | Factura simplificada |
-| `InvoiceType.F3` | F3 | Factura emitida en sustitución de facturas simplificadas |
-| `InvoiceType.F4` | F4 | Asiento resumen de facturas |
+| `InvoiceType.F3` | F3 | Factura emitida en sustitución de facturas simplificadas (hay que indicar cuáles con `setSubstitutedInvoices`) |
+| `InvoiceType.F4` | F4 | Asiento resumen de facturas. **No admitido**: el esquema de la AEAT que usa el SDK no lo incluye; `InvoiceValidator` lo rechaza |
 | `InvoiceType.R1` | R1 | Rectificativa (art. 80.1, 80.2, 80.6 LIVA) |
 | `InvoiceType.R2` | R2 | Rectificativa (art. 80.3 LIVA) |
 | `InvoiceType.R3` | R3 | Rectificativa (art. 80.4 LIVA) |
@@ -187,6 +197,39 @@ En **ambos modos** el hash se calcula y encadena exactamente igual (misma huella
 | `InvoiceType.R5` | R5 | Rectificativa de facturas simplificadas |
 
 Ejemplos de construcción de cada tipo (incluyendo rectificativas por sustitución y por diferencia, y facturas con destinatario extranjero): [`InvoiceTypesExample.java`](src/test/java/com/squareetlabs/verifactu/examples/InvoiceTypesExample.java). Detalle completo en la Wiki: **[Tipos de factura](https://github.com/squareetlabs/verifactu-sdk/wiki/Tipos-de-Factura)**.
+
+### Facturas rectificativas (R1-R5)
+
+Una rectificativa necesita el tipo de rectificación (`setCorrectionType("S")` por sustitución, `"I"` por diferencias) y debe indicar qué factura corrige con `setRectifiedInvoices` (`FacturasRectificadas`):
+
+```java
+invoice.setInvoiceType(InvoiceType.R1);
+invoice.setCorrectionType("I");
+invoice.setRectifiedInvoices(Collections.singletonList(
+        new InvoiceReference("F2026-001", LocalDate.of(2026, 1, 15)))); // número y fecha de la original
+```
+
+El emisor de la factura rectificada es el mismo de la configuración; usa `new InvoiceReference(nifEmisor, numero, fecha)` si es otro. Por sustitución (`"S"`) hay que informar además los importes originales (`setCorrectedBaseAmount` / `setCorrectedTaxAmount`). Por diferencias los importes de la factura son los de la diferencia y pueden ser negativos.
+
+### Destinatarios
+
+Un destinatario con NIF español se crea con nombre y NIF: `new Recipient("Cliente S.L.", "B12345674")`. Un destinatario **extranjero** se envía con el bloque `IDOtro`: país (ISO 3166-1 alfa-2) y tipo de documento:
+
+```java
+new Recipient("Client SARL", "FR12345678901", "FR", "02"); // 02 NIF-IVA
+new Recipient("John Smith", "P1234567", "GB", "03");        // 03 pasaporte
+```
+
+| Tipo | Documento |
+|---|---|
+| `02` | NIF-IVA (el prefijo del identificador ya indica el país) |
+| `03` | Pasaporte |
+| `04` | Documento oficial del país de residencia |
+| `05` | Certificado de residencia |
+| `06` | Otro documento probatorio |
+| `07` | No censado |
+
+Una factura completa (F1, F3, R1-R4) normalmente identifica al destinatario. Si no se identifica (art. 6.1.d RD 1619/2012), márcala con `invoice.setWithoutRecipientIdentification(true)` y deja los destinatarios vacíos; el SDK envía `FacturaSinIdentifDestinatarioArt61d = S`.
 
 ## Anulación de un registro de facturación
 
@@ -214,6 +257,8 @@ Casos especiales contemplados por la AEAT, disponibles vía setters de `Annulmen
 | `setRetryAfterRejection(true)` | Se corrige una anulación previa para la MISMA factura que la AEAT rechazó |
 | `setGeneratedBy("T"/"D")` + `setGeneratorName/TaxId` | La anulación la generó un tercero o el propio destinatario, no el obligado |
 
+Una anulación remitida a la AEAT puede ser **rechazada** igual que un alta: `aeat_status` será `Incorrecto` y el motivo vendrá en `aeat_error_code` / `aeat_error_message`. En ese caso el registro de alta sigue vigente en la AEAT; no encadenes sobre la anulación rechazada (ver [`ResponseHandlingExample.isChainable`](src/test/java/com/squareetlabs/verifactu/examples/ResponseHandlingExample.java)).
+
 Ejemplo completo: [`AnnulmentExample.java`](src/test/java/com/squareetlabs/verifactu/examples/AnnulmentExample.java)
 
 ## Representación de terceros
@@ -228,22 +273,30 @@ VeriFactu contempla **tres mecanismos** de representación, opcionales e indepen
 
 Ejemplos: [`ThirdPartyRepresentationExample.java`](src/test/java/com/squareetlabs/verifactu/examples/ThirdPartyRepresentationExample.java). Detalle completo: **[Representación de terceros](https://github.com/squareetlabs/verifactu-sdk/wiki/Representacion-de-Terceros)**.
 
-## Validación local de facturas
+## Validación local
+
+`InvoiceValidator` valida **antes de enviar** lo que la AEAT rechaza, con mensajes legibles. Todos sus métodos son estáticos y devuelven un `ValidationResult` con dos listas: `errors` (la AEAT lo rechazará o el SDK no puede representarlo: el resultado no es válido) y `warnings` (datos sospechosos que no invalidan).
 
 ```java
 import com.squareetlabs.verifactu.helpers.InvoiceValidator;
+import com.squareetlabs.verifactu.helpers.InvoiceValidator.ValidationResult;
 
-// Metodo ESTATICO: no se instancia InvoiceValidator.
-InvoiceValidator.ValidationResult result = InvoiceValidator.validate(invoice);
+ValidationResult result = InvoiceValidator.validate(invoice, config);      // factura, con el emisor de la configuración
+InvoiceValidator.validate(annulment, config);                              // anulación
+InvoiceValidator.validate(config);                                         // emisor, representante y sistema informático
+InvoiceValidator.validate(invoice);                                        // el emisor se toma de Invoice#getIssuerTaxId
 
-if (result.isValid()) {
-    System.out.println("Factura válida");
-} else {
-    System.out.println(result.getErrorMessage());
+if (!result.isValid()) {
+    System.out.println(result.getErrorMessage()); // lista formateada
+    result.getErrors();                           // uno a uno
+    result.getErrorSummary();                     // todos en una línea
 }
+result.getWarnings();
 ```
 
-Valida: NIF/CIF (formato y dígito de control), coherencia base+cuota=total, campos obligatorios, y que las facturas rectificativas referencien correctamente la original.
+`AeatClient.sendInvoice` y `sendAnnulment` ejecutan esta validación antes de firmar y enviar: un registro con errores **no sale**, y la respuesta trae `status=error`, un `message` (`Validacion local: ...`) y la lista en `validation_errors`.
+
+Comprueba, entre otros: campos obligatorios y longitudes del esquema de la AEAT, NIF/CIF/NIE (formato y dígito de control; los NIF especiales K, L y M se aceptan por formato), fecha no futura, tipo de factura admitido, desglose (1 a 12 líneas, códigos de calificación, exención y régimen, base + cuotas + recargos = total), rectificativas (tipo de rectificación e importes corregidos), facturas rectificadas y sustituidas, destinatarios nacionales y extranjeros, y la configuración del sistema informático. Los importes negativos son legales (rectificativas por diferencias): no son un error por sí mismos.
 
 ### Validación de NIF/CIF/NIE
 
