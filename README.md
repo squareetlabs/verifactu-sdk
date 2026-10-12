@@ -29,7 +29,7 @@ Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu 
 <dependency>
     <groupId>com.squareetlabs</groupId>
     <artifactId>verifactu</artifactId>
-    <version>1.4.2</version>
+    <version>1.4.3</version>
 </dependency>
 ```
 
@@ -100,6 +100,8 @@ El SDK cubre la **remisión voluntaria VERI\*FACTU** (altas, anulaciones, subsan
 - Identificar con `IDOtro` al tercero emisor, al generador de una anulación o al productor del sistema informático (solo se admite NIF).
 
 ## Novedades
+
+**1.4.3** — Margen de la fecha de generación. La AEAT exige que `FechaHoraHusoGenRegistro` sea la fecha actual de su sistema con un margen de **240 segundos** (código 2004); fuera del margen acepta el registro con errores. Comprobado en preproducción con un registro generado 20 minutos antes de enviarse. El validador usa ahora 240 s (antes 5 minutos, solo hacia el futuro) y la respuesta trae `generation_timestamp_warning` cuando la fecha se aleja más de ese margen de la hora actual al remitir. Usa `setGenerationTimestamp` solo para reenviar un registro cuya respuesta no recibiste; en el resto de reintentos, genera la fecha de nuevo.
 
 **1.4.2** — Correcciones de la revisión independiente.
 - El cliente valida también la configuración (`InvoiceValidator.validate(config)`) antes de enviar: con el NIF de desarrollador por defecto (`B12345678`, inválido), `sendInvoice` y `sendAnnulment` devuelven `status=error`. Configura siempre `setDeveloperNif`.

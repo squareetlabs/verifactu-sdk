@@ -140,11 +140,19 @@ public class InvoiceValidator {
                 config != null ? config.getIssuerName() : null, true, today);
     }
 
+    /**
+     * AEAT (code 2004): {@code FechaHoraHusoGenRegistro} must be the current date of the AEAT system, with a margin of
+     * 240 seconds. A record that falls outside it is accepted with errors.
+     */
+    public static final long GENERATION_TIMESTAMP_MARGIN_SECONDS = 240;
+
     /** AEAT: generation instant later than the system date (with a margin) is accepted with errors. */
     private static void checkGenerationTimestamp(Findings f, java.time.ZonedDateTime generated) {
-        if (generated != null && generated.isAfter(java.time.ZonedDateTime.now(MADRID).plusMinutes(5))) {
+        if (generated != null && generated.isAfter(
+                java.time.ZonedDateTime.now(MADRID).plusSeconds(GENERATION_TIMESTAMP_MARGIN_SECONDS))) {
             f.warning("La fecha y hora de generación del registro es posterior a la fecha del sistema: "
-                    + generated + " (la AEAT acepta el registro con errores)");
+                    + generated + " (la AEAT acepta el registro con errores si la diferencia supera "
+                    + GENERATION_TIMESTAMP_MARGIN_SECONDS + " segundos)");
         }
     }
 
