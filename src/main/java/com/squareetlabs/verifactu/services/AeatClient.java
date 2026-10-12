@@ -321,7 +321,9 @@ public class AeatClient {
                         new ObjectFactory().createRegistroAlta(registroAlta);
                 return buildLocalOnlyResponse(element, huella, huellaInputString, numSerie, fechaExp, tsString);
             }
-            return performSoapCall(cabecera, listaRegistros, huella, huellaInputString, numSerie, fechaExp, tsString);
+            return withGenerationTimestampWarning(
+                    performSoapCall(cabecera, listaRegistros, huella, huellaInputString, numSerie, fechaExp, tsString),
+                    now);
 
         } catch (Exception e) {
             Map<String, Object> errorMap = new HashMap<>();
@@ -433,7 +435,9 @@ public class AeatClient {
                         new ObjectFactory().createRegistroAnulacion(registroAnulacion);
                 return buildLocalOnlyResponse(element, huella, huellaInputString, numSerie, fechaExp, tsString);
             }
-            return performSoapCall(cabecera, listaRegistros, huella, huellaInputString, numSerie, fechaExp, tsString);
+            return withGenerationTimestampWarning(
+                    performSoapCall(cabecera, listaRegistros, huella, huellaInputString, numSerie, fechaExp, tsString),
+                    now);
 
         } catch (Exception e) {
             Map<String, Object> errorMap = new HashMap<>();
@@ -1066,6 +1070,31 @@ public class AeatClient {
      */
     private boolean isCorrectiveInvoice(String tipoFactura) {
         return Arrays.asList("R1", "R2", "R3", "R4", "R5").contains(tipoFactura);
+    }
+
+    /**
+     * Warning text when the generation instant is too far from the current time to be remitted: the AEAT (code 2004)
+     * requires it to be the current date of its system with a margin of 240 seconds and accepts the record with errors
+     * otherwise. {@code null} when it is within the margin. A record that was already generated and signed with an
+     * older instant cannot be fixed without changing its hash, so the SDK sends it as is and reports the warning.
+     */
+    static String generationTimestampWarning(ZonedDateTime generated, ZonedDateTime now) {
+        long skew = java.time.Duration.between(generated, now).getSeconds();
+        if (Math.abs(skew) <= InvoiceValidator.GENERATION_TIMESTAMP_MARGIN_SECONDS) {
+            return null;
+        }
+        return "La fecha de generacion del registro (" + generated + ") difiere " + Math.abs(skew) + " segundos de la "
+                + "hora actual; la AEAT exige un margen de " + InvoiceValidator.GENERATION_TIMESTAMP_MARGIN_SECONDS
+                + " segundos y acepta el registro con errores (codigo 2004). Genera un registro nuevo con la fecha "
+                + "actual, salvo que reenvies uno cuya respuesta no recibiste.";
+    }
+
+    private Map<String, Object> withGenerationTimestampWarning(Map<String, Object> response, ZonedDateTime generated) {
+        String warning = generationTimestampWarning(generated, ZonedDateTime.now(ZoneId.of("Europe/Madrid")));
+        if (warning != null && response != null) {
+            response.put("generation_timestamp_warning", warning);
+        }
+        return response;
     }
 
     /**
