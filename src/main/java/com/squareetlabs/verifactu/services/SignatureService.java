@@ -26,6 +26,15 @@ public class SignatureService {
     }
 
     public byte[] signXml(byte[] xmlContent) throws Exception {
+        return signXml(xmlContent, null);
+    }
+
+    /**
+     * Signs the XML (XAdES enveloped) and places the signature right after the element selected by
+     * {@code placeAfterXPath}, or as the last child of the root element when it is {@code null}. A schema that wants
+     * the signature inside an inner element (the event record: the last child of {@code Evento}) needs the former.
+     */
+    public byte[] signXml(byte[] xmlContent, String placeAfterXPath) throws Exception {
         // Load the token (PKCS12)
         Pkcs12SignatureToken token = new Pkcs12SignatureToken(certPath,
                 new KeyStore.PasswordProtection(certPassword.toCharArray()));
@@ -35,6 +44,10 @@ public class SignatureService {
         parameters.setSignatureLevel(SignatureLevel.XAdES_BASELINE_B); // Basic XAdES, adjust if needed (e.g. EPES)
         parameters.setSignaturePackaging(SignaturePackaging.ENVELOPED); // Signature inside the XML
         parameters.setDigestAlgorithm(DigestAlgorithm.SHA256);
+        if (placeAfterXPath != null) {
+            parameters.setXPathLocationString(placeAfterXPath);
+            parameters.setXPathElementPlacement(XAdESSignatureParameters.XPathElementPlacement.XPathAfter);
+        }
 
         // Get the key (private key entry)
         eu.europa.esig.dss.token.DSSPrivateKeyEntry signingKey = token.getKeys().get(0);

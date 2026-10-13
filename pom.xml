@@ -138,6 +138,30 @@
         </executions>
       </plugin>
       
+      <!-- Registro de eventos (EventosSIF.xsd): su propio paquete, porque sus tipos repiten nombres de los de facturacion -->
+      <plugin>
+        <groupId>org.jvnet.jaxb2.maven2</groupId>
+        <artifactId>maven-jaxb2-plugin</artifactId>
+        <version>0.15.3</version>
+        <executions>
+          <execution>
+            <id>generate-event-sources</id>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+            <configuration>
+              <schemaDirectory>${project.basedir}/src/main/resources</schemaDirectory>
+              <schemaIncludes>
+                <include>EventosSIF.xsd</include>
+              </schemaIncludes>
+              <generatePackage>com.squareetlabs.verifactu.aeat.events</generatePackage>
+              <generateDirectory>${project.build.directory}/generated-sources/xjc-events</generateDirectory>
+              <episode>false</episode>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
       <!-- Source Plugin -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
