@@ -267,6 +267,30 @@ public class EventRecordTest {
                 .setDetails(new Event.Summary(0, "0.00", "0.00", 0))), "carries AnomalyDetection");
     }
 
+    @Test
+    public void generate_withoutTheDeveloperName_isRejectedInsteadOfProducingAnInvalidXml() {
+        URL cert = getClass().getClassLoader().getResource("test-cert.p12");
+        VeriFactuConfig config = TestConfig.of("Empresa Test SL", "B12345678");
+        config.setDeveloperName("");
+
+        Map<String, Object> response = new EventRecordService(cert.getPath(), PASSWORD, config)
+                .generate(event(EventType.NO_VERIFACTU_START));
+
+        assertRejected(response, "developer");
+        assertFalse(response.containsKey("signedXml"));
+    }
+
+    @Test
+    public void generate_whatTheSchemaRejects_isReportedAsAnErrorAndNeverReturnedAsSigned() {
+        // The tax id must have exactly 9 characters: the official schema rejects this one after the record is built.
+        Event event = new Event(EventType.NO_VERIFACTU_START, "B1234567890", "Empresa Test SL").setGeneratedAt(T0);
+
+        Map<String, Object> response = service().generate(event);
+
+        assertRejected(response, "NIFType");
+        assertFalse(response.containsKey("signedXml"));
+    }
+
     // ─── helpers ────────────────────────────────────────────────────────────────
 
     private static String repeat(char c, int times) {
