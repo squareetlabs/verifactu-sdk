@@ -23,11 +23,18 @@ import com.squareetlabs.verifactu.helpers.HashHelper;
 import com.squareetlabs.verifactu.models.Event;
 import com.squareetlabs.verifactu.models.EventType;
 
+import javax.xml.XMLConstants;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.Marshaller;
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.XMLGregorianCalendar;
+import javax.xml.transform.stream.StreamSource;
+import javax.xml.validation.Schema;
+import javax.xml.validation.SchemaFactory;
+import javax.xml.validation.Validator;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.net.URL;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -78,11 +85,7 @@ public class EventRecordService {
     public Map<String, Object> generate(Event event) {
         List<String> errors = validate(event);
         if (!errors.isEmpty()) {
-            Map<String, Object> response = new HashMap<>();
-            response.put("status", "error");
-            response.put("message", "Event record is not valid: " + String.join("; ", errors));
-            response.put("validation_errors", errors);
-            return response;
+            return error("Event record is not valid: " + String.join("; ", errors), errors);
         }
         try {
             ZonedDateTime generatedAt = event.getGeneratedAt().truncatedTo(ChronoUnit.SECONDS);
@@ -95,6 +98,11 @@ public class EventRecordService {
 
             RegistroEvento record = build(event, generatedAt, hash.get("hash"));
             byte[] signedXml = new SignatureService(certPath, certPassword).signXml(marshal(record), PLACE_AFTER_EVENT_HASH);
+            List<String> schemaErrors = schemaErrors(signedXml);
+            if (!schemaErrors.isEmpty()) {
+                // Never hand back a record that the official schema rejects.
+                return error("Event record is not valid against EventosSIF.xsd: " + String.join("; ", schemaErrors), schemaErrors);
+            }
 
             Map<String, Object> response = new HashMap<>();
             response.put("status", "success");
@@ -110,6 +118,28 @@ public class EventRecordService {
             response.put("message", "The event record could not be generated: " + e.getMessage());
             return response;
         }
+    }
+
+    private static Map<String, Object> error(String message, List<String> validationErrors) {
+        Map<String, Object> response = new HashMap<>();
+        response.put("status", "error");
+        response.put("message", message);
+        response.put("validation_errors", validationErrors);
+        return response;
+    }
+
+    /** Validates the signed record against the official schema, which the SDK packages. */
+    private static List<String> schemaErrors(byte[] xml) {
+        List<String> errors = new ArrayList<>();
+        try {
+            URL xsd = EventRecordService.class.getClassLoader().getResource("EventosSIF.xsd");
+            Schema schema = SchemaFactory.newInstance(XMLConstants.W3C_XML_SCHEMA_NS_URI).newSchema(xsd);
+            Validator validator = schema.newValidator();
+            validator.validate(new StreamSource(new ByteArrayInputStream(xml)));
+        } catch (Exception e) {
+            errors.add(e.getMessage());
+        }
+        return errors;
     }
 
     List<String> validate(Event event) {
@@ -129,6 +159,9 @@ public class EventRecordService {
         }
         if (tooLong(event.getOtherData(), MAX_OTHER_DATA)) {
             errors.add("The other data of the event are longer than " + MAX_OTHER_DATA + " characters");
+        }
+        if (isBlank(config.getDeveloperName())) {
+            errors.add("The developer name is required");
         }
         if (isBlank(config.getDeveloperNif()) || isBlank(config.getSystemId()) || isBlank(config.getSystemVersion())
                 || isBlank(config.getInstallationNumber())) {
