@@ -101,6 +101,8 @@ El SDK cubre la **remisión voluntaria VERI\*FACTU** (altas, anulaciones, subsan
 
 ## Novedades
 
+**1.5.0** — Registro de eventos de NO VERI\*FACTU. `EventRecordService` genera cada evento como un `RegistroEvento` del esquema oficial `EventosSIF.xsd`, lo encadena con el anterior mediante su huella (`HashHelper.generateEventHash`, según el documento de la AEAT sobre la huella) y lo firma con XAdES enveloped, con la firma como último hijo de `Evento`. Admite los tipos 01 a 10 y 90 (`EventType`, lista L2E) y los tipos de anomalía de la lista L1E (`AnomalyType`), con los datos propios de los eventos de lanzamiento y detección de anomalías, exportación y resumen. Los eventos nunca se envían a la AEAT. Ver [Registro de eventos](#registro-de-eventos-no-verifactu).
+
 **1.4.3** — Margen de la fecha de generación. La AEAT exige que `FechaHoraHusoGenRegistro` sea la fecha actual de su sistema con un margen de **240 segundos** (código 2004); fuera del margen acepta el registro con errores. Comprobado en preproducción con un registro generado 20 minutos antes de enviarse. El validador usa ahora 240 s (antes 5 minutos, solo hacia el futuro) y la respuesta trae `generation_timestamp_warning` cuando la fecha se aleja más de ese margen de la hora actual al remitir. Usa `setGenerationTimestamp` solo para reenviar un registro cuya respuesta no recibiste; en el resto de reintentos, genera la fecha de nuevo.
 
 **1.4.2** — Correcciones de la revisión independiente.
@@ -399,6 +401,34 @@ byte[] signedXml = signatureService.signXml(xmlBytes);
 
 Ejemplo completo: [`SignatureExample.java`](src/test/java/com/squareetlabs/verifactu/examples/SignatureExample.java)
 
+## Registro de eventos (NO VERI\*FACTU)
+
+Un sistema que funciona en modo NO VERI\*FACTU debe llevar un registro de eventos (Orden HAC/1177/2024, artículo 9): inicio y fin del funcionamiento, lanzamiento y detección de anomalías, exportaciones y un resumen periódico. `EventRecordService` genera cada evento, lo encadena y lo firma; **no se envía a la AEAT**.
+
+```java
+VeriFactuConfig config = new VeriFactuConfig("Mi Empresa S.L.", "B72877814");
+config.setDeveloperNif("B72877814");
+EventRecordService events = new EventRecordService("/ruta/certificado.p12", "password", config);
+
+// El primer evento de la cadena de un obligado: sin evento anterior (PrimerEvento = S)
+Map<String, Object> start = events.generate(
+        new Event(EventType.NO_VERIFACTU_START, "B72877814", "Mi Empresa S.L."));
+
+// Un evento posterior se encadena con el anterior
+Event next = new Event(EventType.NO_VERIFACTU_END, "B72877814", "Mi Empresa S.L.")
+        .setPrevious(new Event.Reference(EventType.NO_VERIFACTU_START,
+                ZonedDateTime.parse((String) start.get("generated_at")), (String) start.get("hash")));
+Map<String, Object> end = events.generate(next);
+```
+
+La respuesta trae `status`, `hash` y `hashInput` (guarda ambos para comprobar la cadena con `HashHelper.verify`), `signedXml` (el `RegistroEvento` firmado, en base64), `generated_at` y `event_type`. Con un evento no válido devuelve `status=error` y `validation_errors`.
+
+- La huella sigue el documento de la AEAT *Detalle de las especificaciones técnicas para la generación de la huella o hash de los registros* (apartado 3.c): `NIF`, `ID`, `IdSistemaInformatico`, `Version`, `NumeroInstalacion`, `NIF` del obligado, `TipoEvento`, `HuellaEvento` (la del evento anterior, vacía en el primero) y `FechaHoraHusoGenEvento`. Los datos del sistema informático salen de `VeriFactuConfig`.
+- Los datos propios de cada tipo se pasan con `setDetails`: `Event.ProcessLaunch` (03 y 05), `Event.AnomalyDetection` (04 y 06), `Event.BillingExport` (08), `Event.EventExport` (09) y `Event.Summary` (10). Los demás tipos no llevan datos propios.
+- El XML valida contra `EventosSIF.xsd`, que el SDK empaqueta.
+
+Ejemplo completo: [`EventRecordExample.java`](src/test/java/com/squareetlabs/verifactu/examples/EventRecordExample.java)
+
 ## Testing
 
 ```bash
@@ -447,6 +477,7 @@ Toda la documentación detallada vive en la **[Wiki del proyecto](https://github
 - [Validación de facturas](https://github.com/squareetlabs/verifactu-sdk/wiki/Validacion-de-Facturas)
 - [Generación de QR](https://github.com/squareetlabs/verifactu-sdk/wiki/Generacion-de-QR)
 - [Firma digital XAdES](https://github.com/squareetlabs/verifactu-sdk/wiki/Firma-Digital-XAdES)
+- [Registro de eventos](https://github.com/squareetlabs/verifactu-sdk/wiki/Registro-de-Eventos)
 - [Solución de problemas](https://github.com/squareetlabs/verifactu-sdk/wiki/Solucion-de-Problemas)
 
 También se genera Javadoc completo, publicado automáticamente junto al paquete: [javadoc.io/doc/com.squareetlabs/verifactu](https://javadoc.io/doc/com.squareetlabs/verifactu).

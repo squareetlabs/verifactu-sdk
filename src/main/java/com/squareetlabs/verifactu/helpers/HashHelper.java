@@ -116,6 +116,43 @@ public class HashHelper {
     }
 
     /**
+     * Generates the hash of an event record ("registro de evento") according to the AEAT document "Detalle de las
+     * especificaciones técnicas para la generación de la huella o hash de los registros" (section 3.c): the fields in
+     * the order of the record design, as {@code name=value} joined by {@code &}. The first event of a chain has no
+     * previous hash ({@code HuellaEvento=} stays empty). The software system is identified by the developer's tax id
+     * ({@code NIF}); {@code ID} stays empty.
+     *
+     * @param developerTaxId     {@code SistemaInformatico/NIF}
+     * @param systemId           {@code SistemaInformatico/IdSistemaInformatico}
+     * @param systemVersion      {@code SistemaInformatico/Version}
+     * @param installationNumber {@code SistemaInformatico/NumeroInstalacion}
+     * @param obligorTaxId       {@code ObligadoEmision/NIF}
+     * @param eventType          {@code TipoEvento} (code of two digits)
+     * @param previousHash       {@code Encadenamiento/EventoAnterior/HuellaEvento}, or {@code null} for the first event
+     * @param generatedAt        {@code FechaHoraHusoGenEvento} (ISO 8601 with offset)
+     * @return Map containing 'hash' and 'inputString'
+     */
+    public static Map<String, String> generateEventHash(String developerTaxId, String systemId, String systemVersion,
+                                                         String installationNumber, String obligorTaxId,
+                                                         String eventType, String previousHash, String generatedAt) {
+        StringBuilder inputString = new StringBuilder();
+        inputString.append(field("NIF", developerTaxId, true));
+        inputString.append(field("ID", null, true));
+        inputString.append(field("IdSistemaInformatico", systemId, true));
+        inputString.append(field("Version", systemVersion, true));
+        inputString.append(field("NumeroInstalacion", installationNumber, true));
+        inputString.append(field("NIF", obligorTaxId, true));
+        inputString.append(field("TipoEvento", eventType, true));
+        inputString.append(field("HuellaEvento", previousHash, true));
+        inputString.append(field("FechaHoraHusoGenEvento", generatedAt, false));
+
+        Map<String, String> result = new HashMap<>();
+        result.put("hash", sha256(inputString.toString()).toUpperCase());
+        result.put("inputString", inputString.toString());
+        return result;
+    }
+
+    /**
      * Verifies that {@code hash} is exactly the SHA-256 digest of {@code inputString}, i.e. that
      * a previously generated/stored record has not been tampered with.
      * <p>
