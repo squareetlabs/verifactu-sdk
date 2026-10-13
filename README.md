@@ -29,7 +29,7 @@ Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu 
 <dependency>
     <groupId>com.squareetlabs</groupId>
     <artifactId>verifactu</artifactId>
-    <version>1.4.3</version>
+    <version>1.5.0</version>
 </dependency>
 ```
 
