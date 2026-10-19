@@ -9,12 +9,12 @@ import com.squareetlabs.verifactu.helpers.HashHelper;
 import com.squareetlabs.verifactu.helpers.InvoiceValidator;
 import com.squareetlabs.verifactu.aeat.*;
 
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBElement;
-import javax.xml.bind.Marshaller;
+import jakarta.xml.bind.JAXBContext;
+import jakarta.xml.bind.JAXBElement;
+import jakarta.xml.bind.Marshaller;
 import javax.xml.datatype.DatatypeFactory;
 import javax.xml.datatype.XMLGregorianCalendar;
-import javax.xml.ws.Holder;
+import jakarta.xml.ws.Holder;
 import java.io.ByteArrayOutputStream;
 import java.net.URL;
 import java.math.BigDecimal;
@@ -1026,7 +1026,10 @@ public class AeatClient {
 
     static boolean isTimeout(Throwable error) {
         for (Throwable cause = error; cause != null; cause = cause.getCause() == cause ? null : cause.getCause()) {
-            if (cause instanceof java.net.SocketTimeoutException || cause instanceof java.net.ConnectException
+            // CXF 4 sends through java.net.http.HttpClient, which throws HttpTimeoutException (and its subclass
+            // HttpConnectTimeoutException) instead of SocketTimeoutException.
+            if (cause instanceof java.net.SocketTimeoutException || cause instanceof java.net.http.HttpTimeoutException
+                    || cause instanceof java.net.ConnectException
                     && String.valueOf(cause.getMessage()).toLowerCase().contains("timed out")) {
                 return true;
             }

@@ -1,6 +1,6 @@
 # VeriFactu Java - Sistema de facturación electrónica
 
-Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu según las especificaciones de la Agencia Tributaria (AEAT).
+Paquete Java 17+ (Jakarta EE) para gestión y registro de facturación electrónica VeriFactu según las especificaciones de la Agencia Tributaria (AEAT).
 
 > 📖 **Documentación completa**: esta guía cubre lo esencial para empezar. Para el detalle de cada caso de uso (tipos de factura, rectificativas, representación de terceros, multi-tenant, validación, QR, firma digital, solución de problemas...) consulta la **[Wiki del proyecto](https://github.com/squareetlabs/verifactu-sdk/wiki)**.
 >
@@ -36,7 +36,7 @@ Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu 
 Con Gradle:
 
 ```groovy
-implementation 'com.squareetlabs:verifactu:1.2.0'
+implementation 'com.squareetlabs:verifactu:1.5.0'
 ```
 
 ### Opción 2: Desde el repositorio local
@@ -100,6 +100,8 @@ El SDK cubre la **remisión voluntaria VERI\*FACTU** (altas, anulaciones, subsan
 - Identificar con `IDOtro` al tercero emisor, al generador de una anulación o al productor del sistema informático (solo se admite NIF).
 
 ## Novedades
+
+**2.0.0** (en desarrollo) — Migración a Jakarta EE. El SDK pasa de `javax.xml.bind`/`javax.xml.ws` a `jakarta.xml.bind`/`jakarta.xml.ws`, con Apache CXF 4.2, EU DSS 6.5 y JAXB 4.0, y exige **Java 17**. La API pública no cambia (modelos propios y `Map<String, Object>`), pero la aplicación que lo use debe estar sobre Jakarta (por ejemplo, Spring Boot 3 o superior) y no puede mezclar en el mismo classpath la versión 5.x de DSS. El XML generado, la huella y la firma XAdES no cambian. CXF 4 envía con `java.net.http.HttpClient`: un tiempo de espera agotado se sigue marcando con `timeout = true`. Para Java 8–16 o aplicaciones sobre `javax`, usa la línea 1.5.x.
 
 **1.5.0** — Registro de eventos de NO VERI\*FACTU. `EventRecordService` genera cada evento como un `RegistroEvento` del esquema oficial `EventosSIF.xsd`, lo encadena con el anterior mediante su huella (`HashHelper.generateEventHash`, según el documento de la AEAT sobre la huella) y lo firma con XAdES enveloped, con la firma como último hijo de `Evento`. Admite los tipos 01 a 10 y 90 (`EventType`, lista L2E) y los tipos de anomalía de la lista L1E (`AnomalyType`), con los datos propios de los eventos de lanzamiento y detección de anomalías, exportación y resumen. Los eventos nunca se envían a la AEAT. Ver [Registro de eventos](#registro-de-eventos-no-verifactu).
 
@@ -460,7 +462,7 @@ src/
 
 ## Requisitos
 
-- Java 8 o superior
+- Java 17 o superior y una aplicación sobre Jakarta EE (desde la 2.0.0; la línea 1.5.x funciona con Java 8 y `javax`)
 - Maven 3+
 - Certificado digital válido para firma electrónica
 
