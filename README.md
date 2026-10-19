@@ -466,6 +466,20 @@ src/
 - Maven 3+
 - Certificado digital válido para firma electrónica
 
+## Versiones y soporte
+
+El SDK mantiene dos líneas:
+
+| Línea | Rama | Plataforma | Dependencias | Estado |
+| --- | --- | --- | --- | --- |
+| 2.x | `main` | Java 17+, Jakarta EE (`jakarta.xml.bind`, `jakarta.xml.ws`) | CXF 4.2, DSS 6.5, JAXB 4.0 | Desarrollo activo |
+| 1.x | `1.x` | Java 8+, `javax` (`javax.xml.bind`, `javax.xml.ws`) | CXF 3.5, DSS 5.11, JAXB 2.3 | Mantenimiento |
+
+- Las novedades entran en `main` (2.x).
+- La línea 1.x solo recibe correcciones y cambios normativos de la AEAT. Cada cambio se lleva de una rama a otra con `git cherry-pick -x`, y el PR indica si se aplica a la otra línea.
+- Cada línea se publica desde su rama: un release de GitHub creado sobre `1.x` publica una 1.x, y uno sobre `main` publica una 2.x.
+- Usa la 1.x si tu aplicación todavía está sobre `javax` (por ejemplo, Spring Boot 2) o sobre Java 8–16, y pasa a la 2.x cuando migres a Jakarta.
+
 ## Documentación completa
 
 Toda la documentación detallada vive en la **[Wiki del proyecto](https://github.com/squareetlabs/verifactu-sdk/wiki)**:
