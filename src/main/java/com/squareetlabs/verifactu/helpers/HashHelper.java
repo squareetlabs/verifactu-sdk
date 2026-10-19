@@ -153,6 +153,38 @@ public class HashHelper {
     }
 
     /**
+     * The generation instant of a record or an event, exactly as it entered its hash: {@code FechaHoraHusoGenRegistro}
+     * or {@code FechaHoraHusoGenEvento} of the hash input string ({@code hashInput} of the response), in Europe/Madrid.
+     * It keeps the offset, so in the repeated hour of the change of time (the last Sunday of October, from 02:00 to
+     * 02:59) a value of the first pass (+02:00) is not read an hour later. Pass it to {@code setGenerationTimestamp} or
+     * {@code Event.setGeneratedAt} to resend or regenerate the same record with the same hash; a local date-time column
+     * without offset cannot tell the two passes apart.
+     *
+     * @param hashInput hash input string of a record or an event
+     * @return the instant, or {@code null} if the string has no readable generation timestamp
+     */
+    public static java.time.ZonedDateTime generatedAtOf(String hashInput) {
+        if (hashInput == null) {
+            return null;
+        }
+        for (String name : new String[] {"FechaHoraHusoGenRegistro=", "FechaHoraHusoGenEvento="}) {
+            int start = hashInput.lastIndexOf(name);
+            if (start < 0) {
+                continue;
+            }
+            start += name.length();
+            int end = hashInput.indexOf('&', start);
+            try {
+                return java.time.OffsetDateTime.parse(end < 0 ? hashInput.substring(start) : hashInput.substring(start, end))
+                        .atZoneSameInstant(java.time.ZoneId.of("Europe/Madrid"));
+            } catch (java.time.format.DateTimeParseException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Verifies that {@code hash} is exactly the SHA-256 digest of {@code inputString}, i.e. that
      * a previously generated/stored record has not been tampered with.
      * <p>
