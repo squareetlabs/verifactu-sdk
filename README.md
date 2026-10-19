@@ -29,14 +29,14 @@ Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu 
 <dependency>
     <groupId>com.squareetlabs</groupId>
     <artifactId>verifactu</artifactId>
-    <version>1.5.0</version>
+    <version>1.6.0</version>
 </dependency>
 ```
 
 Con Gradle:
 
 ```groovy
-implementation 'com.squareetlabs:verifactu:1.2.0'
+implementation 'com.squareetlabs:verifactu:1.6.0'
 ```
 
 ### Opción 2: Desde el repositorio local
@@ -101,7 +101,7 @@ El SDK cubre la **remisión voluntaria VERI\*FACTU** (altas, anulaciones, subsan
 
 ## Novedades
 
-**1.6.0** (en desarrollo) — Hora repetida del cambio de hora. En la madrugada del último domingo de octubre, de 02:00 a 02:59 cada hora local de Madrid ocurre dos veces (+02:00 y +01:00), y solo el huso las distingue. `HashHelper.generatedAtOf(hashInput)` devuelve la fecha de generación exacta, con el huso con que entró en la huella, de un registro o de un evento a partir del `hashInput` de la respuesta: pásala a `setGenerationTimestamp` o a `Event.setGeneratedAt` para reenviar o regenerar el mismo registro con la misma huella. Una columna de fecha y hora local sin huso no distingue las dos pasadas. La fecha por defecto de un `Event` usa ahora el huso de Madrid, como los registros de facturación: antes tomaba la zona de la JVM, y en un servidor en UTC salía `…Z`. Una fecha de evento dada por quien llama se firma con su propio huso, como en la 1.5.0, así que las huellas de los eventos ya generados no cambian.
+**1.6.0** — Hora repetida del cambio de hora. En la madrugada del último domingo de octubre, de 02:00 a 02:59 cada hora local de Madrid ocurre dos veces (+02:00 y +01:00), y solo el huso las distingue. `HashHelper.generatedAtOf(hashInput)` devuelve la fecha de generación exacta, con el huso con que entró en la huella, de un registro o de un evento a partir del `hashInput` de la respuesta: pásala a `setGenerationTimestamp` o a `Event.setGeneratedAt` para reenviar o regenerar el mismo registro con la misma huella. Una columna de fecha y hora local sin huso no distingue las dos pasadas. La fecha por defecto de un `Event` usa ahora el huso de Madrid, como los registros de facturación: antes tomaba la zona de la JVM, y en un servidor en UTC salía `…Z`. Una fecha de evento dada por quien llama se firma con su propio huso, como en la 1.5.0, así que las huellas de los eventos ya generados no cambian.
 
 **1.5.0** — Registro de eventos de NO VERI\*FACTU. `EventRecordService` genera cada evento como un `RegistroEvento` del esquema oficial `EventosSIF.xsd`, lo encadena con el anterior mediante su huella (`HashHelper.generateEventHash`, según el documento de la AEAT sobre la huella) y lo firma con XAdES enveloped, con la firma como último hijo de `Evento`. Admite los tipos 01 a 10 y 90 (`EventType`, lista L2E) y los tipos de anomalía de la lista L1E (`AnomalyType`), con los datos propios de los eventos de lanzamiento y detección de anomalías, exportación y resumen. Los eventos nunca se envían a la AEAT. Ver [Registro de eventos](#registro-de-eventos-no-verifactu).
 
