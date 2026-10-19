@@ -131,12 +131,12 @@ public class DaylightSavingOverlapTest {
     }
 
     @Test
-    public void event_sameInstantInAnotherZoneIsWrittenInMadrid() {
+    public void event_suppliedTimestampKeepsItsOwnOffset() {
+        // Como en la 1.5.0: una fecha dada se firma con su huso, para que un evento regenerado desde su huella
+        // (HashHelper.generatedAtOf) dé el mismo texto y la misma huella. Solo la fecha por defecto pasa a Madrid.
         Map<String, Object> fromUtc = events().generate(event(FIRST_PASS.withZoneSameInstant(ZoneOffset.UTC)));
 
-        // Como en los registros de facturación: siempre con el huso de Madrid, nunca "Z" ni el de otra zona.
-        assertEquals("2025-10-26T02:30:10+02:00", fromUtc.get("generated_at"));
-        assertEquals(events().generate(event(FIRST_PASS)).get("hash"), fromUtc.get("hash"));
+        assertEquals("2025-10-26T00:30:10Z", fromUtc.get("generated_at"));
     }
 
     @Test
@@ -171,6 +171,33 @@ public class DaylightSavingOverlapTest {
 
         assertEquals(FIRST_PASS.toInstant(), recovered.toInstant());
         assertEquals(ZoneOffset.ofHours(2), recovered.getOffset());
+        assertEquals(response.get("hash"), events().generate(event(recovered)).get("hash"));
+    }
+
+    @Test
+    public void generatedAtOf_recoversTheSecondPassOfAnAnnulment() {
+        Annulment annulment = new Annulment("DST-001", LocalDate.of(2025, 10, 26));
+        annulment.setGenerationTimestamp(SECOND_PASS);
+        Map<String, Object> response = client().sendAnnulment(annulment, null);
+
+        ZonedDateTime recovered = HashHelper.generatedAtOf((String) response.get("hashInput"));
+
+        assertEquals(SECOND_PASS.toInstant(), recovered.toInstant());
+        assertEquals(ZoneOffset.ofHours(1), recovered.getOffset());
+        Annulment resend = new Annulment("DST-001", LocalDate.of(2025, 10, 26));
+        resend.setGenerationTimestamp(recovered);
+        assertEquals(response.get("hash"), client().sendAnnulment(resend, null).get("hash"));
+    }
+
+    @Test
+    public void generatedAtOf_regeneratesAnEventGeneratedInUtcWithTheSameHash() {
+        // Un evento de la 1.5.0 generado en una JVM en UTC lleva "Z" en su huella: se regenera igual.
+        Map<String, Object> response = events().generate(event(FIRST_PASS.withZoneSameInstant(ZoneOffset.UTC)));
+        assertTrue(((String) response.get("hashInput")).endsWith("FechaHoraHusoGenEvento=2025-10-26T00:30:10Z"));
+
+        ZonedDateTime recovered = HashHelper.generatedAtOf((String) response.get("hashInput"));
+
+        assertEquals(ZoneOffset.UTC, recovered.getOffset());
         assertEquals(response.get("hash"), events().generate(event(recovered)).get("hash"));
     }
 

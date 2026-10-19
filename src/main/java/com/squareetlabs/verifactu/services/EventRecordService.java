@@ -36,7 +36,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.net.URL;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -56,7 +55,6 @@ import java.util.Map;
  */
 public class EventRecordService {
 
-    private static final ZoneId MADRID = ZoneId.of("Europe/Madrid");
     private static final DateTimeFormatter EVENT_TIMESTAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ssXXX");
     private static final DateTimeFormatter AEAT_DATE = DateTimeFormatter.ofPattern("dd-MM-yyyy");
     private static final String SCHEMA_VERSION = "1.0";
@@ -90,10 +88,9 @@ public class EventRecordService {
             return error("Event record is not valid: " + String.join("; ", errors), errors);
         }
         try {
-            // Always with the Europe/Madrid offset of that instant, as the invoicing records: in the repeated hour of
-            // the change of time the offset tells the two passes apart, and an instant given in another zone gives the
-            // same text (and the same hash) as in Madrid.
-            ZonedDateTime generatedAt = event.getGeneratedAt().withZoneSameInstant(MADRID).truncatedTo(ChronoUnit.SECONDS);
+            // The supplied instant with its own offset, as 1.5.0 did: an event regenerated from its hash input (see
+            // HashHelper.generatedAtOf) gives the same text and the same hash. Event's default is already in Madrid.
+            ZonedDateTime generatedAt = event.getGeneratedAt().truncatedTo(ChronoUnit.SECONDS);
             String generatedAtText = generatedAt.format(EVENT_TIMESTAMP);
             String previousHash = event.getPrevious() != null ? event.getPrevious().getHash() : null;
 
@@ -422,8 +419,7 @@ public class EventRecordService {
     }
 
     private static XMLGregorianCalendar calendar(ZonedDateTime time) throws Exception {
-        return DatatypeFactory.newInstance().newXMLGregorianCalendar(
-                time.withZoneSameInstant(MADRID).truncatedTo(ChronoUnit.SECONDS).format(EVENT_TIMESTAMP));
+        return DatatypeFactory.newInstance().newXMLGregorianCalendar(time.truncatedTo(ChronoUnit.SECONDS).format(EVENT_TIMESTAMP));
     }
 
     private static byte[] marshal(RegistroEvento record) throws Exception {
