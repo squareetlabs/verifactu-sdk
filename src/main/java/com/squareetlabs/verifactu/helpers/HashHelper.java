@@ -153,6 +153,41 @@ public class HashHelper {
     }
 
     /**
+     * The generation instant of a record or an event, exactly as it entered its hash: {@code FechaHoraHusoGenRegistro}
+     * or {@code FechaHoraHusoGenEvento} of the hash input string ({@code hashInput} of the response). It keeps the
+     * offset, so in the repeated hour of the change of time (the last Sunday of October, from 02:00 to 02:59) a value of
+     * the first pass (+02:00) is not read an hour later; a local date-time column without offset cannot tell the two
+     * passes apart. The zone is Europe/Madrid when the offset is the one of Madrid at that instant, and the offset itself
+     * otherwise (for example an event generated with {@code Z}). Pass it to {@code setGenerationTimestamp} or
+     * {@code Event.setGeneratedAt} to resend or regenerate the same record with the same hash.
+     *
+     * @param hashInput hash input string of a record or an event
+     * @return the instant, or {@code null} if the string has no readable generation timestamp
+     */
+    public static java.time.ZonedDateTime generatedAtOf(String hashInput) {
+        if (hashInput == null) {
+            return null;
+        }
+        for (String name : new String[] {"FechaHoraHusoGenRegistro=", "FechaHoraHusoGenEvento="}) {
+            int start = hashInput.lastIndexOf(name);
+            if (start < 0) {
+                continue;
+            }
+            start += name.length();
+            int end = hashInput.indexOf('&', start);
+            java.time.OffsetDateTime parsed;
+            try {
+                parsed = java.time.OffsetDateTime.parse(end < 0 ? hashInput.substring(start) : hashInput.substring(start, end));
+            } catch (java.time.format.DateTimeParseException e) {
+                return null;
+            }
+            java.time.ZonedDateTime madrid = parsed.atZoneSameInstant(java.time.ZoneId.of("Europe/Madrid"));
+            return madrid.getOffset().equals(parsed.getOffset()) ? madrid : parsed.toZonedDateTime();
+        }
+        return null;
+    }
+
+    /**
      * Verifies that {@code hash} is exactly the SHA-256 digest of {@code inputString}, i.e. that
      * a previously generated/stored record has not been tampered with.
      * <p>

@@ -14,8 +14,8 @@ import org.apache.cxf.transport.http.HTTPConduit;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import javax.xml.ws.BindingProvider;
-import javax.xml.ws.Holder;
+import jakarta.xml.ws.BindingProvider;
+import jakarta.xml.ws.Holder;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;

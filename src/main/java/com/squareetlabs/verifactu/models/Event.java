@@ -1,6 +1,7 @@
 package com.squareetlabs.verifactu.models;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -17,7 +18,7 @@ public class Event {
     private final EventType type;
     private final String obligorTaxId;
     private final String obligorName;
-    private ZonedDateTime generatedAt = ZonedDateTime.now();
+    private ZonedDateTime generatedAt = ZonedDateTime.now(ZoneId.of("Europe/Madrid"));
     private Reference previous;
     private String otherData;
     private Object details;

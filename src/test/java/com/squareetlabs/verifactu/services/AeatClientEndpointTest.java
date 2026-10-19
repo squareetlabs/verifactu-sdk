@@ -5,7 +5,7 @@ import com.squareetlabs.verifactu.aeat.SfVerifactu;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import javax.xml.ws.BindingProvider;
+import jakarta.xml.ws.BindingProvider;
 import java.net.URL;
 
 import static org.junit.Assert.assertEquals;

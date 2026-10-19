@@ -1,6 +1,6 @@
 # VeriFactu Java - Sistema de facturación electrónica
 
-Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu según las especificaciones de la Agencia Tributaria (AEAT).
+Paquete Java 17+ (Jakarta EE) para gestión y registro de facturación electrónica VeriFactu según las especificaciones de la Agencia Tributaria (AEAT).
 
 > 📖 **Documentación completa**: esta guía cubre lo esencial para empezar. Para el detalle de cada caso de uso (tipos de factura, rectificativas, representación de terceros, multi-tenant, validación, QR, firma digital, solución de problemas...) consulta la **[Wiki del proyecto](https://github.com/squareetlabs/verifactu-sdk/wiki)**.
 >
@@ -36,7 +36,7 @@ Paquete Java 8+ para gestión y registro de facturación electrónica VeriFactu 
 Con Gradle:
 
 ```groovy
-implementation 'com.squareetlabs:verifactu:1.2.0'
+implementation 'com.squareetlabs:verifactu:1.5.0'
 ```
 
 ### Opción 2: Desde el repositorio local
@@ -100,6 +100,10 @@ El SDK cubre la **remisión voluntaria VERI\*FACTU** (altas, anulaciones, subsan
 - Identificar con `IDOtro` al tercero emisor, al generador de una anulación o al productor del sistema informático (solo se admite NIF).
 
 ## Novedades
+
+**2.0.0** (en desarrollo) — Migración a Jakarta EE. El SDK pasa de `javax.xml.bind`/`javax.xml.ws` a `jakarta.xml.bind`/`jakarta.xml.ws`, con Apache CXF 4.2, EU DSS 6.5 y JAXB 4.0, y exige **Java 17**. La API pública no cambia (modelos propios y `Map<String, Object>`), pero la aplicación que lo use debe estar sobre Jakarta (por ejemplo, Spring Boot 3 o superior) y no puede mezclar en el mismo classpath la versión 5.x de DSS. El XML generado, la huella y la firma XAdES no cambian. CXF 4 envía con `java.net.http.HttpClient`: un tiempo de espera agotado se sigue marcando con `timeout = true`. Incluye lo de la 1.6.0 (`HashHelper.generatedAtOf` y la fecha por defecto de los eventos en Madrid). Para Java 8–16 o aplicaciones sobre `javax`, usa la línea 1.x.
+
+**1.6.0** (en desarrollo) — Hora repetida del cambio de hora. En la madrugada del último domingo de octubre, de 02:00 a 02:59 cada hora local de Madrid ocurre dos veces (+02:00 y +01:00), y solo el huso las distingue. `HashHelper.generatedAtOf(hashInput)` devuelve la fecha de generación exacta, con el huso con que entró en la huella, de un registro o de un evento a partir del `hashInput` de la respuesta: pásala a `setGenerationTimestamp` o a `Event.setGeneratedAt` para reenviar o regenerar el mismo registro con la misma huella. Una columna de fecha y hora local sin huso no distingue las dos pasadas. La fecha por defecto de un `Event` usa ahora el huso de Madrid, como los registros de facturación: antes tomaba la zona de la JVM, y en un servidor en UTC salía `…Z`. Una fecha de evento dada por quien llama se firma con su propio huso, como en la 1.5.0, así que las huellas de los eventos ya generados no cambian.
 
 **1.5.0** — Registro de eventos de NO VERI\*FACTU. `EventRecordService` genera cada evento como un `RegistroEvento` del esquema oficial `EventosSIF.xsd`, lo encadena con el anterior mediante su huella (`HashHelper.generateEventHash`, según el documento de la AEAT sobre la huella) y lo firma con XAdES enveloped, con la firma como último hijo de `Evento`. Admite los tipos 01 a 10 y 90 (`EventType`, lista L2E) y los tipos de anomalía de la lista L1E (`AnomalyType`), con los datos propios de los eventos de lanzamiento y detección de anomalías, exportación y resumen. Los eventos nunca se envían a la AEAT. Ver [Registro de eventos](#registro-de-eventos-no-verifactu).
 
@@ -460,9 +464,23 @@ src/
 
 ## Requisitos
 
-- Java 8 o superior
+- Java 17 o superior y una aplicación sobre Jakarta EE (desde la 2.0.0; la línea 1.5.x funciona con Java 8 y `javax`)
 - Maven 3+
 - Certificado digital válido para firma electrónica
+
+## Versiones y soporte
+
+El SDK mantiene dos líneas:
+
+| Línea | Rama | Plataforma | Dependencias | Estado |
+| --- | --- | --- | --- | --- |
+| 2.x | `main` | Java 17+, Jakarta EE (`jakarta.xml.bind`, `jakarta.xml.ws`) | CXF 4.2, DSS 6.5, JAXB 4.0 | Desarrollo activo |
+| 1.x | `1.x` | Java 8+, `javax` (`javax.xml.bind`, `javax.xml.ws`) | CXF 3.5, DSS 5.11, JAXB 2.3 | Mantenimiento |
+
+- Las novedades entran en `main` (2.x).
+- La línea 1.x solo recibe correcciones y cambios normativos de la AEAT. Cada cambio se lleva de una rama a otra con `git cherry-pick -x`, y el PR indica si se aplica a la otra línea.
+- Cada línea se publica desde su rama: un release de GitHub creado sobre `1.x` publica una 1.x, y uno sobre `main` publica una 2.x.
+- Usa la 1.x si tu aplicación todavía está sobre `javax` (por ejemplo, Spring Boot 2) o sobre Java 8–16, y pasa a la 2.x cuando migres a Jakarta.
 
 ## Documentación completa
 
