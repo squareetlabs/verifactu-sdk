@@ -88,6 +88,8 @@ public class EventRecordService {
             return error("Event record is not valid: " + String.join("; ", errors), errors);
         }
         try {
+            // The supplied instant with its own offset, as 1.5.0 did: an event regenerated from its hash input (see
+            // HashHelper.generatedAtOf) gives the same text and the same hash. Event's default is already in Madrid.
             ZonedDateTime generatedAt = event.getGeneratedAt().truncatedTo(ChronoUnit.SECONDS);
             String generatedAtText = generatedAt.format(EVENT_TIMESTAMP);
             String previousHash = event.getPrevious() != null ? event.getPrevious().getHash() : null;
